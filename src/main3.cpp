@@ -52,6 +52,7 @@ char coloreRilevato = 'n'; // 'n' = nessuno, 'r' = rosso, 'g' = giallo, 'v' = ve
 bool threadAttivo = true;
 bool giallo = false;
 bool verde = false;
+int distanzaTotale = 0; // Contatore distanza totale avanti
 
 // Espansione triport
 triport expander = triport(PORT3);
@@ -80,6 +81,7 @@ void inizio() {
     // Correzione della distanza
     float distanzaCorretta = distanza * FATTORE_CORREZIONE_AVANTI;
     Smartdrive.driveFor(forward, distanzaCorretta, mm, velocita, rpm);
+    distanzaTotale += distanza; // Aggiorna contatore distanza
 
     // Controlla continuamente se un oggetto è rilevato frontalmente
     while(Smartdrive.isMoving()) {
@@ -148,6 +150,7 @@ void move(char direzione, int distanza) {
 
     if(direzione == 'f') {
         Smartdrive.driveFor(forward, distanzaCorretta, mm, VELOCITA_AVANZAMENTO, rpm);
+        distanzaTotale += distanza; // Aggiorna contatore distanza
     } else if (direzione == 'b') {
         Smartdrive.driveFor(reverse, distanzaCorretta, mm, VELOCITA_AVANZAMENTO, rpm);
     }
@@ -183,22 +186,23 @@ void controllaRobotBraccio(char azione) {
     
     switch(azione) {
         case 'u':
-            braccio.spinToPosition(posizioneAlzata, rotationUnits::deg, (velocita -10), velocityUnits::pct);
+            braccio.spinToPosition(BRACCIO_ALZATO, rotationUnits::deg, (VELOCITA_BRACCIO - 10), velocityUnits::pct);
             braccio.stop(hold);
             break;
         case 'd':
-         braccio.spinToPosition(posizioneAbbassata, rotationUnits::deg, velocita, velocityUnits::pct);
-         braccio.stop(hold);
-          break;
+            braccio.spinToPosition(BRACCIO_ABBASSATO, rotationUnits::deg, VELOCITA_BRACCIO, velocityUnits::pct);
+            braccio.stop(hold);
+            break;
         case 'o':
-            pinza.spinToPosition(posizioneAperta, degrees, (velocita + 10), velocityUnits::pct, true);
+            pinza.spinToPosition(PINZA_APERTA, degrees, (VELOCITA_PINZA + 10), velocityUnits::pct, true);
             pinza.stop(hold);
-         break;
-     case 'c':
-            pinza.spinToPosition(posizioneChiusa, degrees, velocita, velocityUnits::pct, false);
+            break;
+        case 'c':
+            pinza.spinToPosition(PINZA_CHIUSA, degrees, VELOCITA_PINZA, velocityUnits::pct, false);
             pinza.stop(hold);
+            break;
         default:
-         break;
+            break;
     }
     
     if (motoreTarget != nullptr) {
@@ -293,6 +297,83 @@ char leggiFront() {
 }
 
 /**
+ * Funzione che implementa percorsi diversi in base al colore rilevato
+ * Gestisce percorsi specifici per rosso e giallo
+ */
+void colori() {
+    // Rileva il colore dell'oggetto
+    char colore = leggiFront();
+    
+    // Visualizza il colore rilevato e implementa percorsi diversi
+    Brain.Screen.clearScreen();
+    Brain.Screen.setCursor(1, 1);
+    Brain.Screen.print("Colore rilevato: ");
+    
+    if (colore == 'r') { // Se colore rosso
+        Brain.Screen.print("ROSSO");
+        Brain.Screen.newLine();
+        Brain.Screen.print("Eseguendo percorso ROSSO");
+        
+        // Percorso specifico per oggetto rosso
+        prendi();
+        turn(180);
+        move('f', 120);
+        turn(270);
+        move('f', 80);
+        lascia();
+        
+        // Ritorno
+        move('b', 50);
+        turn(180);
+        move('f', 100);
+        turn(90);
+        move('f', 40);
+
+
+
+    } 
+    else if (colore == 'g') { // Se colore giallo
+        Brain.Screen.print("GIALLO");
+        Brain.Screen.newLine();
+        Brain.Screen.print("Eseguendo percorso GIALLO");
+        
+        // Percorso specifico per oggetto giallo
+        prendi();
+        turn(90);
+        move('f', 140);
+        turn(180);
+        move('f', 60);
+        lascia();
+        
+        // Ritorno
+        move('b', 60);
+        turn(270);
+        move('f', 90);
+    }
+    else {
+        // Percorso predefinito se il colore non è né rosso né giallo
+        Brain.Screen.print("Non riconosciuto");
+        Brain.Screen.newLine();
+        Brain.Screen.print("Eseguendo percorso standard");
+        
+        // Preleva l'oggetto
+        prendi();
+        
+        // Esegui percorso standard
+        move('b', 60);
+        turn(270);
+        move('f', 70);
+        
+        // Rilascia l'oggetto
+        lascia();
+    }
+    
+    // Visualizza la distanza totale percorsa in avanti
+    Brain.Screen.newLine();
+    Brain.Screen.print("Distanza totale: %d mm", distanzaTotale);
+}
+
+/**
  * Programma principale
  */
 int main() {
@@ -333,30 +414,18 @@ int main() {
     turn(90);
     move('f', 60);
     
-    // Preleva l'oggetto
-    prendi();
-    
-    // Torna indietro e posiziona l'oggetto
-    move('b', 60);
-    turn(270);
-    move('f', 70);
-    
-    // Rilascia l'oggetto
-    lascia();
+    // Esegui la sequenza in base al colore rilevato
+    colori();
     
     // Fase finale - torna alla posizione di partenza
-    move('b', 40);
-    turn(180);
-    move('f', 140);
-    turn(270);
-    move('f', 100);
-    turn(360);
-    move('f', 40);
+
     
-    // Segnala completamento
+    // Segnala completamento e mostra distanza totale
     Brain.Screen.clearScreen();
     Brain.Screen.setCursor(1,1);
     Brain.Screen.print("Missione completata!");
+    Brain.Screen.newLine();
+    Brain.Screen.print("Distanza totale: %d mm", distanzaTotale);
     
     // Termina il thread di monitoraggio
     threadAttivo = false;
