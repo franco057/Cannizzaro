@@ -24,12 +24,12 @@ inertial Inertial = inertial(PORT7);
 smartdrive Smartdrive = smartdrive(leftMotors, rightMotors, Inertial, 100.0, 260.9, 127.3, mm);
 
 // Costanti per le posizioni
-const double PINZA_APERTA = -70.0;
-const double PINZA_CHIUSA = 50.0;
-const double BRACCIO_ALZATO = -45.0;
+const double PINZA_APERTA = -67.5;
+const double PINZA_CHIUSA = 43.5;
+const double BRACCIO_ALZATO = -35.5;
 const double BRACCIO_ABBASSATO = 120.0;
-const int VELOCITA_BRACCIO = 25;
-const int VELOCITA_PINZA = 25;
+const int VELOCITA_BRACCIO = 20;
+const int VELOCITA_PINZA = 20;
 
 // Costanti per il movimento
 const double FATTORE_CORREZIONE_AVANTI = 0.3333;
@@ -199,6 +199,7 @@ void controllaRobotBraccio(char azione) {
             break;
         case 'c':
             pinza.spinToPosition(PINZA_CHIUSA, degrees, VELOCITA_PINZA, velocityUnits::pct, false);
+            this_thread::sleep_for(milliseconds(1000));
             pinza.stop(hold);
             break;
         default:
@@ -316,18 +317,17 @@ void colori() {
         
         // Percorso specifico per oggetto rosso
         prendi();
-        turn(180);
-        move('f', 120);
+        move('b', 100);
         turn(270);
-        move('f', 80);
+        move('f', 70);
         lascia();
         
         // Ritorno
         move('b', 50);
-        turn(180);
-        move('f', 100);
         turn(90);
-        move('f', 40);
+        move('f', 80);
+        turn(0);
+        move('f', 100);
 
 
 
@@ -350,8 +350,13 @@ void colori() {
         turn(270);
         move('f', 90);
     }
+    else if (colore=='v') {
+        Brain.Screen.print("VERDE ");
+        Brain.Screen.newLine();
+        Brain.Screen.print("Eseguendo percorso VERDE");
+    }
     else {
-return(0);
+        turn(87);
     }
     
     // Visualizza la distanza totale percorsa in avanti

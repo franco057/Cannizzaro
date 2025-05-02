@@ -263,9 +263,9 @@ int main() {
     lascia();
 
     // move('b', 40);
-    // turn(270);
+    // turn(0);
     // move('f', 100);
-    // turn(360);
+    // turn(90);
     // move('f', 40);
 
     //fine istruzioni
