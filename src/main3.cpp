@@ -351,21 +351,7 @@ void colori() {
         move('f', 90);
     }
     else {
-        // Percorso predefinito se il colore non è né rosso né giallo
-        Brain.Screen.print("Non riconosciuto");
-        Brain.Screen.newLine();
-        Brain.Screen.print("Eseguendo percorso standard");
-        
-        // Preleva l'oggetto
-        prendi();
-        
-        // Esegui percorso standard
-        move('b', 60);
-        turn(270);
-        move('f', 70);
-        
-        // Rilascia l'oggetto
-        lascia();
+return(0);
     }
     
     // Visualizza la distanza totale percorsa in avanti
