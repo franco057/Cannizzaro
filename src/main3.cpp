@@ -25,7 +25,7 @@ smartdrive Smartdrive = smartdrive(leftMotors, rightMotors, Inertial, 100.0, 260
 
 // Costanti per le posizioni
 const double PINZA_APERTA = -70.0;
-const double PINZA_CHIUSA = 45.0;
+const double PINZA_CHIUSA = 50.0;
 const double BRACCIO_ALZATO = -45.0;
 const double BRACCIO_ABBASSATO = 120.0;
 const int VELOCITA_BRACCIO = 25;
@@ -182,32 +182,27 @@ void controllaRobotBraccio(char azione) {
     motor* motoreTarget = nullptr;
     
     switch(azione) {
-        case 'u': // Alza braccio
-            motoreTarget = &braccio;
-            posizione = BRACCIO_ALZATO;
-            velocitaMotore = VELOCITA_BRACCIO - 10; // Velocità ridotta per alzare
+        case 'u':
+            braccio.spinToPosition(posizioneAlzata, rotationUnits::deg, (velocita -10), velocityUnits::pct);
+            braccio.stop(hold);
             break;
-        case 'd': // Abbassa braccio
-            motoreTarget = &braccio;
-            posizione = BRACCIO_ABBASSATO;
-            velocitaMotore = VELOCITA_BRACCIO;
-            break;
-        case 'o': // Apri pinza
-            motoreTarget = &pinza;
-            posizione = PINZA_APERTA;
-            velocitaMotore = VELOCITA_PINZA + 10; // Velocità aumentata per aprire
-            break;
-        case 'c': // Chiudi pinza
-            motoreTarget = &pinza;
-            posizione = PINZA_CHIUSA;
-            velocitaMotore = VELOCITA_PINZA;
-            break;
+        case 'd':
+         braccio.spinToPosition(posizioneAbbassata, rotationUnits::deg, velocita, velocityUnits::pct);
+         braccio.stop(hold);
+          break;
+        case 'o':
+            pinza.spinToPosition(posizioneAperta, degrees, (velocita + 10), velocityUnits::pct, true);
+            pinza.stop(hold);
+         break;
+     case 'c':
+            pinza.spinToPosition(posizioneChiusa, degrees, velocita, velocityUnits::pct, false);
+            pinza.stop(hold);
         default:
-            return; // Azione non riconosciuta
+         break;
     }
     
     if (motoreTarget != nullptr) {
-        motoreTarget->spinToPosition(posizione, rotationUnits::deg, velocitaMotore, velocityUnits::pct, true);
+        motoreTarget->spinToPosition(posizione, rotationUnits::deg, velocitaMotore, velocityUnits::pct, false);
         motoreTarget->stop(hold);
     }
 }
@@ -318,7 +313,7 @@ int main() {
     Brain.Screen.clearScreen();
     Brain.Screen.setCursor(1,1);
     Brain.Screen.print("Calibrazione completata!");
-    this_thread::sleep_for(seconds(1));
+    this_thread::sleep_for(milliseconds(1));
 
     // Imposta l'orientamento iniziale
     Smartdrive.setHeading(0, degrees);
@@ -351,9 +346,12 @@ int main() {
     
     // Fase finale - torna alla posizione di partenza
     move('b', 40);
+    turn(180);
+    move('f', 140);
     turn(270);
     move('f', 100);
-    turn(0);
+    turn(360);
+    move('f', 40);
     
     // Segnala completamento
     Brain.Screen.clearScreen();

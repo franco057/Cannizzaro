@@ -143,7 +143,7 @@ void Pinza(char a, double d){
             pinza.stop(hold);
             break;
         case 'c':
-            pinza.spinToPosition(posizioneChiusa, degrees, velocita, velocityUnits::pct, true);
+            pinza.spinToPosition(posizioneChiusa, degrees, velocita, velocityUnits::pct, false);
             pinza.stop(hold);
         default:
             break;
