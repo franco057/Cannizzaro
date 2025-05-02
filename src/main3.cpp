@@ -353,7 +353,12 @@ void colori() {
     else if (colore=='v') {
         Brain.Screen.print("VERDE ");
         Brain.Screen.newLine();
-        Brain.Screen.print("Eseguendo percorso VERDE");
+        Brain.Screen.print("NON TOCCARE");
+        move('b', 40);
+        turn(0);
+        move('f', 100);
+        turn(90);
+        move('f', 40);
     }
     else {
         turn(87);
