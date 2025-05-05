@@ -1,16 +1,362 @@
-windows build for platform vexv5
-"CXX src/main.cpp"
-src/main.cpp:283:46: error: function definition is not allowed here
-    bool coloreAffidabile(double brightness) {
-                                             ^
-src/main.cpp:301:56: error: function definition is not allowed here
-    char riconosciColoreHV(int hue, double brightness) {
-                                                       ^
-src/main.cpp:354:27: error: use of undeclared identifier 'riconosciColoreHV'
-            char colore = riconosciColoreHV(hue, brightness);
-                          ^
-3 errors generated.
+# Strategia di Percorso per Robot VEX
 
-make: *** [vex/mkrules.mk:13: build/src/main.o] Error 1
+## 1. Schema Generale del Percorso
 
-Make process closed with exit code: 2
+```
+[AREA PARTENZA/ARRIVO (30×64 cm)] → [LETTURA OFFICINA] → [PARCHEGGIO CENTRALE] → [RACCOLTA AUTO] → [DISTRIBUZIONE] → [RITORNO]
+```
+
+## 2. Analisi delle Dimensioni del Campo
+
+Le dimensioni principali del campo da considerare sono:
+- Area partenza/arrivo: 30×64 cm
+- Larghezza corridoi principali: ~30 cm
+- Distanza tra le file di auto: ~10 cm
+- Distanza tra la zona partenza e il parcheggio centrale: ~152.5 cm
+
+## 3. Percorso Dettagliato
+
+### Fase 1: Inizializzazione e Rilevamento Officina
+1. Posizionamento nella zona di partenza
+2. Calibrazione sensori (già implementata nel codice)
+3. Movimento verso l'area di rilevamento del colore dell'officina (~200 mm)
+4. Lettura del colore (giallo o verde) per determinare l'officina disponibile
+5. Memorizzazione dell'informazione per l'intero percorso
+
+### Fase 2: Navigazione verso il Parcheggio Centrale
+1. Movimento in avanti (~350 mm) per uscire dall'area di partenza
+2. Rotazione a 90° per allinearsi con il corridoio principale
+3. Movimento in avanti (~170 mm) per raggiungere l'asse centrale
+4. Rotazione a 0° per allinearsi con la fila di auto
+5. Movimento in avanti (~380 mm) per raggiungere l'inizio delle file di auto
+6. Rotazione a 90° per posizionarsi parallelamente alle file
+
+### Fase 3: Rilevamento e Raccolta Auto
+1. Scansione sequenziale di ciascuna auto utilizzando il sensore ottico
+2. Per ciascuna auto, rilevamento del colore e decisione dell'azione:
+   - Auto rossa: raccolta per trasporto alla colonnina di ricarica
+   - Auto gialla: raccolta per trasporto alla colonnina di ricarica
+   - Auto blu: raccolta per trasporto all'officina del colore rilevato all'inizio
+   - Auto verde: nessuna azione, lasciare nello stallo
+3. Implementazione della sequenza di raccolta:
+   ```
+   Per ogni auto nella fila:
+     - Rilevare il colore
+     - Se è rossa, gialla o blu:
+       - Aprire la pinza
+       - Abbassare il braccio
+       - Chiudere la pinza (presa dell'auto)
+       - Alzare il braccio
+     - Se è verde:
+       - Muoversi alla prossima posizione
+   ```
+
+### Fase 4: Distribuzione delle Auto Raccolte
+
+#### Percorso per Auto Rosse e Gialle (Colonnine di Ricarica)
+1. Dopo aver raccolto un'auto rossa o gialla:
+   - Retrocedere di ~115 mm
+   - Ruotare a 270° (verso sinistra)
+   - Avanzare di ~70 mm verso la colonnina
+   - Eseguire la sequenza di rilascio:
+     ```
+     - Abbassare il braccio
+     - Aprire la pinza
+     - Alzare il braccio
+     - Chiudere la pinza
+     ```
+   - Ritorno al percorso principale:
+     ```
+     - Retrocedere di ~50 mm
+     - Ruotare a 90°
+     - Avanzare di ~80 mm
+     - Ruotare a 0°
+     - Avanzare di ~115 mm per tornare alla posizione originale
+     ```
+
+#### Percorso per Auto Blu (Officina)
+1. Dopo aver raccolto un'auto blu:
+   - Se l'officina rilevata è gialla:
+     ```
+     - Retrocedere di ~100 mm
+     - Ruotare a 180°
+     - Avanzare di ~250 mm verso l'officina gialla
+     - Eseguire la sequenza di rilascio
+     - Tornare al percorso principale
+     ```
+   - Se l'officina rilevata è verde:
+     ```
+     - Retrocedere di ~100 mm
+     - Ruotare a 0°
+     - Avanzare di ~250 mm verso l'officina verde
+     - Eseguire la sequenza di rilascio
+     - Tornare al percorso principale
+     ```
+
+#### Percorso per Auto Verdi
+1. Quando viene rilevata un'auto verde:
+   ```
+   - Non toccare l'auto
+   - Retrocedere di ~40 mm per sicurezza
+   - Ruotare a 0°
+   - Avanzare di ~100 mm per superare l'auto
+   - Ruotare a 90° per riallinearsi con la fila
+   - Avanzare di ~40 mm per posizionarsi di fronte alla prossima auto
+   ```
+
+### Fase 5: Ritorno all'Area di Partenza/Arrivo
+1. Dopo aver completato tutte le operazioni con le 18 auto:
+   ```
+   - Calcolare la distanza dalla posizione attuale all'area di partenza
+   - Ruotare verso la direzione dell'area di partenza
+   - Avanzare fino all'area di partenza, evitando ostacoli
+   - Fermarsi all'interno dell'area di partenza/arrivo
+   ```
+
+## 4. Ottimizzazioni del Percorso
+
+### Ottimizzazione del Trasporto
+- Quando possibile, raccogliere multiple auto (rosse, gialle, blu) prima di dirigersi alle destinazioni
+- Prioritizzare il percorso in base alla vicinanza delle destinazioni
+- Minimizzare le rotazioni inutili
+- Utilizzare la correzione di traiettoria basata sul sensore inerziale
+
+### Gestione degli Ostacoli
+- Utilizzare il sensore ottico frontale per rilevare ostacoli
+- Implementare una logica di evitamento ostacoli:
+  ```
+  Se viene rilevato un ostacolo durante il movimento:
+    - Fermare il robot
+    - Calcolare un percorso alternativo
+    - Se possibile, aggiornare la mappa mentale degli ostacoli
+  ```
+
+### Conteggio e Monitoraggio
+- Mantenere il conteggio delle auto trasportate per tipo
+- Monitorare il numero di auto in ciascuna colonnina di ricarica (max 5)
+- Utilizzare il contatore di distanza longitudinale per aiutare nella navigazione
+
+## 5. Implementazione nel Codice
+
+### Modifiche al Codice Esistente
+Il codice fornito contiene già molte delle funzionalità necessarie, ma richiede alcune modifiche:
+
+1. Aggiungere variabili globali per il conteggio:
+```cpp
+int autoRosseRaccolte = 0;
+int autoGialleRaccolte = 0;
+int autoBluRaccolte = 0;
+int autoInColonnina1 = 0;
+int autoInColonnina2 = 0;
+bool officinaVerde = false; // false = officina gialla, true = officina verde
+```
+
+2. Modificare la funzione `leggiFront()` per gestire tutti i colori necessari
+
+3. Implementare la logica completa nella funzione `colori()` per gestire i diversi percorsi:
+
+```cpp
+void colori() {
+    for (int i = 0; i < 18; i++) { // 18 auto totali
+        // Rileva il colore dell'oggetto
+        char colore = leggiFront();
+        
+        // Visualizza il colore rilevato
+        Brain.Screen.clearScreen();
+        Brain.Screen.setCursor(1, 1);
+        Brain.Screen.print("Auto %d: ", i+1);
+        
+        // Salva la posizione attuale
+        int posizioneIniziale = distanzaLongitudinale;
+        
+        // Gestione in base al colore
+        switch(colore) {
+            case 'r': // Rosso
+                Brain.Screen.print("ROSSA");
+                
+                // Verifica se colonnina è piena
+                if (autoInColonnina1 < 5) {
+                    prendi();
+                    // Percorso verso colonnina 1
+                    move('b', 115);
+                    turn(270);
+                    move('f', 70);
+                    lascia();
+                    autoInColonnina1++;
+                    autoRosseRaccolte++;
+                    
+                    // Ritorno
+                    move('b', 50);
+                    turn(90);
+                    move('f', 80);
+                    turn(0);
+                    move('f', 115);
+                } else if (autoInColonnina2 < 5) {
+                    // Percorso verso colonnina 2
+                    // [Implementare codice per colonnina 2]
+                }
+                break;
+                
+            case 'g': // Giallo
+                Brain.Screen.print("GIALLA");
+                
+                // Percorso simile a quello delle auto rosse
+                // [Implementare codice per auto gialle]
+                break;
+                
+            case 'b': // Blu
+                Brain.Screen.print("BLU");
+                
+                prendi();
+                // Percorso verso l'officina corretta
+                if (officinaVerde) {
+                    // Percorso verso officina verde
+                    // [Implementare codice]
+                } else {
+                    // Percorso verso officina gialla
+                    // [Implementare codice]
+                }
+                autoBluRaccolte++;
+                break;
+                
+            case 'v': // Verde
+                Brain.Screen.print("VERDE");
+                Brain.Screen.newLine();
+                Brain.Screen.print("NON TOCCARE");
+                
+                // Aggira l'auto verde
+                move('b', 40);
+                turn(0);
+                move('f', 100);
+                turn(90);
+                move('f', 40);
+                break;
+                
+            default:
+                // Se il colore non è riconosciuto, ruota leggermente e riprova
+                turn(87);
+                i--; // Riprova con la stessa auto
+                break;
+        }
+    }
+}
+```
+
+4. Modificare la funzione `inizio()` per determinare l'officina disponibile:
+
+```cpp
+void inizio() {
+    // Codice esistente per il movimento
+    
+    // Determina l'officina disponibile
+    if (verde) {
+        officinaVerde = true;
+        Brain.Screen.print("Officina disponibile: VERDE");
+    } else if (giallo) {
+        officinaVerde = false;
+        Brain.Screen.print("Officina disponibile: GIALLA");
+    }
+    
+    // Resto del codice esistente
+}
+```
+
+5. Aggiungere una funzione per il ritorno all'area di partenza:
+
+```cpp
+void ritornoAllaPartenza() {
+    // Calcola l'angolo per tornare all'area di partenza
+    int angoloRitorno = 0; // Calcola in base alla posizione attuale
+    
+    // Ruota verso l'area di partenza
+    turn(angoloRitorno);
+    
+    // Calcola la distanza da percorrere
+    int distanzaAllaPartenza = 0; // Calcola in base alla posizione attuale
+    
+    // Muoviti verso l'area di partenza
+    move('f', distanzaAllaPartenza);
+    
+    // Segnala il completamento
+    Brain.Screen.clearScreen();
+    Brain.Screen.setCursor(1, 1);
+    Brain.Screen.print("Missione completata!");
+    Brain.Screen.newLine();
+    Brain.Screen.print("Auto raccolte - Rosse: %d, Gialle: %d, Blu: %d", 
+                    autoRosseRaccolte, autoGialleRaccolte, autoBluRaccolte);
+}
+```
+
+6. Aggiornare la funzione `main()` per includere tutte le fasi:
+
+```cpp
+int main() {
+    // Reset e calibrazione (codice esistente)
+    
+    // Avvia thread per il monitoraggio frontale
+    thread check = thread(checkFront);
+    
+    // Fase 1: Inizializzazione e lettura colore officina
+    inizio();
+    
+    // Fase 2: Navigazione verso il parcheggio centrale
+    move('f', 350);
+    turn(90);
+    move('f', 170);
+    turn(0);
+    move('f', 380);
+    turn(90);
+    move('f', 75);
+    
+    // Fase 3-4: Rilevamento, raccolta e distribuzione
+    colori();
+    
+    // Fase 5: Ritorno all'area di partenza
+    ritornoAllaPartenza();
+    
+    // Termina il thread di monitoraggio
+    threadAttivo = false;
+    check.join();
+    
+    return 0;
+}
+```
+
+## 6. Percorsi Specifici con Dimensioni Esatte
+
+### Schema dei Percorsi Principali
+
+#### Percorso 1: Partenza → Parcheggio Centrale
+```
+Partenza (0,0) → Avanti (350mm) → Ruota 90° → Avanti (170mm) → 
+Ruota 0° → Avanti (380mm) → Ruota 90° → Avanti (75mm) → 
+Posizione Parcheggio (975mm, 170mm)
+```
+
+#### Percorso 2: Parcheggio → Colonnina di Ricarica 1
+```
+Posizione Auto → Indietro (115mm) → Ruota 270° → Avanti (70mm) → 
+Rilascio Auto → Indietro (50mm) → Ruota 90° → Avanti (80mm) → 
+Ruota 0° → Avanti (115mm) → Ritorno Posizione Originale
+```
+
+#### Percorso 3: Parcheggio → Officina Gialla
+```
+Posizione Auto → Indietro (100mm) → Ruota 180° → 
+Avanti (250mm) → Rilascio Auto → Indietro (250mm) → 
+Ruota 0° → Avanti (100mm) → Ritorno Posizione Originale
+```
+
+#### Percorso 4: Parcheggio → Officina Verde
+```
+Posizione Auto → Indietro (100mm) → Ruota 0° → 
+Avanti (250mm) → Rilascio Auto → Indietro (250mm) → 
+Ruota 180° → Avanti (100mm) → Ritorno Posizione Originale
+```
+
+#### Percorso 5: Auto Verde (Skip)
+```
+Posizione Auto → Indietro (40mm) → Ruota 0° → 
+Avanti (100mm) → Ruota 90° → Avanti (40mm) → 
+Posizione Prossima Auto
+```

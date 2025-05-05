@@ -52,6 +52,7 @@ char coloreRilevato = 'n'; // 'n' = nessuno, 'r' = rosso, 'g' = giallo, 'v' = ve
 bool threadAttivo = true;
 bool giallo = false;
 bool verde = false;
+int c1,c2,c3;
 int distanzaTotale = 0; // Contatore distanza totale avanti
 
 // Espansione triport
