@@ -1,0 +1,26 @@
+src/main.cpp:104:47: error: no member named 'saturation' in 'vex::optical'
+            double saturation = SensoreOttico.saturation(); // Aggiunto il valore di saturazione
+                                ~~~~~~~~~~~~~ ^
+src/main.cpp:284:65: error: function definition is not allowed here
+    bool coloreAffidabile(double saturation, double brightness) {
+                                                                ^
+src/main.cpp:314:76: error: function definition is not allowed here
+    char riconosciColoreHSV(int hue, double saturation, double brightness) {
+                                                                           ^
+src/main.cpp:339:26: error: function definition is not allowed here
+    char leggiFrontHSV() {
+                         ^
+src/main.cpp:358:52: error: no member named 'saturation' in 'vex::optical'
+                double saturation = SensoreOttico2.saturation();
+                                    ~~~~~~~~~~~~~~ ^
+src/main.cpp:371:31: error: use of undeclared identifier 'riconosciColoreHSV'
+                char colore = riconosciColoreHSV(hue, saturation, brightness);
+                              ^
+src/main.cpp:444:1: error: extraneous closing brace ('}')
+}
+^
+7 errors generated.
+
+make: *** [vex/mkrules.mk:13: build/src/main.o] Error 1
+
+Make process closed with exit code: 2

@@ -261,147 +261,12 @@ void controllaRobotBraccio(char azione) {
  */
 void prendi() {
     controllaRobotBraccio('o'); // Apri pinza
-    controllaRobotBraccio('d'); // Abbassa braccio
+    controllaRobotBraccio('u'); // Solleva braccio
+    move('f', 100); // Muovi in avanti di 100mm
     controllaRobotBraccio('c'); // Chiudi pinza
-    controllaRobotBraccio('u'); // Alza braccio
-}
-
-/**
- * Sequenza per lasciare un oggetto
- */
-void lascia() {
+    move('b', 100); // Muovi indietro di 100mm
     controllaRobotBraccio('d'); // Abbassa braccio
-    controllaRobotBraccio('o'); // Apri pinza
-    controllaRobotBraccio('u'); // Alza braccio
-    controllaRobotBraccio('c'); // Chiudi pinza
 }
-
-/**
- * Legge il colore con il sensore frontale
- * @return Colore rilevato: 'r' rosso, 'g' giallo, 'v' verde, 'b' blu, 'n' non determinato
- */
-char leggiFront() {
-    auto coloreAffidabile = [](double saturation, double brightness) -> bool {
-        const double SOGLIA_SATURAZIONE_MINIMA = 20.0;
-        const double SOGLIA_LUMINOSITA_MINIMA = 10.0;
-        double sogliaEffettiva = SOGLIA_SATURAZIONE_MINIMA;
-
-        if (brightness < 30.0 || brightness > 90.0)
-            sogliaEffettiva *= 1.5;
-
-        if (brightness < SOGLIA_LUMINOSITA_MINIMA)
-            return false;
-
-        return saturation >= sogliaEffettiva;
-    };
-
-    auto riconosciColoreHSV = [&](int hue, double saturation, double brightness) -> char {
-        if (!coloreAffidabile(saturation, brightness))
-            return 'n';
-
-        if (hue < 15 || hue >= 330)
-            return 'r';
-        else if (hue >= 30 && hue < 70)
-            return 'g';
-        else if (hue >= 110 && hue < 150)
-            return 'v';
-        else if (hue >= 190 && hue < 250)
-            return 'b';
-
-        return 'n';
-    };
-
-    SensoreOttico2.setLightPower(POTENZA_LED_NORMALE, percent);
-    SensoreOttico2.setLight(ledState::on);
-
-    int conteggiRosso = 0;
-    int conteggioGiallo = 0;
-    int conteggioVerde = 0;
-    int conteggioBlu = 0;
-    int conteggioNonDeterminato = 0;
-
-    int valoriHue[NUMERO_CAMPIONI_COLORE] = {0};
-    double valoriSat[NUMERO_CAMPIONI_COLORE] = {0};
-    double valoriBri[NUMERO_CAMPIONI_COLORE] = {0};
-
-    for (int i = 0; i < NUMERO_CAMPIONI_COLORE; i++) {
-        if (SensoreOttico2.isNearObject()) {
-            int hue = SensoreOttico2.hue(); 
-            double brightness = SensoreOttico2.brightness();
-            double saturation = SensoreOttico2.saturation();
-
-            valoriHue[i] = hue;
-            valoriSat[i] = saturation;
-            valoriBri[i] = brightness;
-
-            if (brightness < SOGLIA_BASSA_LUMINOSITA) {
-                SensoreOttico2.setLightPower(POTENZA_LED_BASSA_LUMINOSITA, percent);
-            }
-
-            char colore = riconosciColoreHSV(hue, saturation, brightness);
-
-            switch(colore) {
-                case 'r': conteggiRosso++; break;
-                case 'g': conteggioGiallo++; break;
-                case 'v': conteggioVerde++; break;
-                case 'b': conteggioBlu++; break;
-                default: conteggioNonDeterminato++; break;
-            }
-        }
-
-        this_thread::sleep_for(milliseconds(50 + RITARDO_LETTURA_COLORE));
-    }
-
-    Brain.Screen.clearScreen();
-    Brain.Screen.setCursor(1, 1);
-    Brain.Screen.print("HSV: ");
-    for (int i = 0; i < 2; i++) {
-        Brain.Screen.print("H:%d S:%.1f B:%.1f  ", valoriHue[i], valoriSat[i], valoriBri[i]);
-    }
-    Brain.Screen.newLine();
-    Brain.Screen.print("R:%d G:%d V:%d B:%d N:%d", conteggiRosso, conteggioGiallo, conteggioVerde, conteggioBlu, conteggioNonDeterminato);
-    Brain.Screen.newLine();
-
-    char coloreFinale = 'n';
-    int maxConteggio = 0;
-
-    if (conteggiRosso > maxConteggio) {
-        maxConteggio = conteggiRosso;
-        coloreFinale = 'r';
-    }
-    if (conteggioGiallo > maxConteggio) {
-        maxConteggio = conteggioGiallo;
-        coloreFinale = 'g';
-    }
-    if (conteggioVerde > maxConteggio) {
-        maxConteggio = conteggioVerde;
-        coloreFinale = 'v';
-    }
-    if (conteggioBlu > maxConteggio) {
-        maxConteggio = conteggioBlu;
-        coloreFinale = 'b';
-    }
-
-    if (maxConteggio < NUMERO_CAMPIONI_COLORE / 3) {
-        coloreFinale = 'n';
-        Brain.Screen.print("Colore incerto");
-    } else {
-        switch (coloreFinale) {
-            case 'r': Brain.Screen.print("Rosso"); break;
-            case 'g': Brain.Screen.print("Giallo"); break;
-            case 'v': Brain.Screen.print("Verde"); break;
-            case 'b': Brain.Screen.print("Blu"); break;
-            default: Brain.Screen.print("Non determinato"); break;
-        }
-    }
-
-    SensoreOttico2.setLight(ledState::off);
-    return coloreFinale;
-}
-/**
- * Funzione che implementa percorsi diversi in base al colore rilevato
- * Gestisce percorsi specifici per rosso e giallo
- */
 void colori() {
     for (int i = 0; i < 17; i++)
     {
@@ -462,37 +327,7 @@ void colori() {
     Brain.Screen.print("Distanza totale: %d mm", distanzaTotale);
 
 }
-
-/**
- * Programma principale
- */
 int main() {
-    // Reset iniziale dei motori
-    braccio.resetPosition();
-    pinza.resetPosition();
-
-    // Calibrazione del sensore inerziale
-    Brain.Screen.clearScreen();
-    Brain.Screen.setCursor(1,1);
-    Brain.Screen.print("Calibrazione sensore inerziale...");
-    
-    Inertial.calibrate();
-    while(Inertial.isCalibrating()) {
-        this_thread::sleep_for(milliseconds(30));
-    }
-    
-    Brain.Screen.clearScreen();
-    Brain.Screen.setCursor(1,1);
-    Brain.Screen.print("Calibrazione completata!");
-    this_thread::sleep_for(milliseconds(1));
-
-    // Imposta l'orientamento iniziale
-    Smartdrive.setHeading(0, degrees);
-
-    // Avvia thread per il monitoraggio frontale
-    thread check = thread(checkFront);
-    
-    // Inizializzazione e lettura colore iniziale
     inizio();
 
     // Sequenza di movimenti per il percorso
@@ -522,4 +357,4 @@ int main() {
     check.join();
     
     return 0;
-}
+    
