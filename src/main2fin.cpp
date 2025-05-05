@@ -101,7 +101,6 @@ void inizio() {
         if (SensoreOttico.isNearObject()) {
             int hue = SensoreOttico.hue(); 
             double brightness = SensoreOttico.brightness(); 
-            double saturation = SensoreOttico.saturation(); // Aggiunto il valore di saturazione
             int lightPower = POTENZA_LED_NORMALE;
 
             // Aumenta la potenza del LED se la luminosità è bassa
@@ -261,12 +260,181 @@ void controllaRobotBraccio(char azione) {
  */
 void prendi() {
     controllaRobotBraccio('o'); // Apri pinza
-    controllaRobotBraccio('u'); // Solleva braccio
-    move('f', 100); // Muovi in avanti di 100mm
-    controllaRobotBraccio('c'); // Chiudi pinza
-    move('b', 100); // Muovi indietro di 100mm
     controllaRobotBraccio('d'); // Abbassa braccio
+    controllaRobotBraccio('c'); // Chiudi pinza
+    controllaRobotBraccio('u'); // Alza braccio
 }
+
+/**
+ * Sequenza per lasciare un oggetto
+ */
+void lascia() {
+    controllaRobotBraccio('d'); // Abbassa braccio
+    controllaRobotBraccio('o'); // Apri pinza
+    controllaRobotBraccio('u'); // Alza braccio
+    controllaRobotBraccio('c'); // Chiudi pinza
+}
+
+/**
+ * Verifica se un colore è affidabile in base alla luminosità
+ * @param brightness Valore di luminosità dal sensore (0-100)
+ * @return true se il colore è affidabile, false altrimenti
+ */
+bool coloreAffidabile(double brightness) {
+    // Con luminosità molto bassa, i colori sono difficili da rilevare correttamente
+    const double SOGLIA_LUMINOSITA_MINIMA = 10.0;
+    
+    // Se la luminosità è troppo bassa, il colore non è affidabile
+    if (brightness < SOGLIA_LUMINOSITA_MINIMA) {
+        return false;
+    }
+    
+    return true;
+}
+
+/**
+ * Riconosce il colore considerando Hue e Luminosità
+ * @param hue Valore dell'hue dal sensore (0-359)
+ * @param brightness Valore di luminosità dal sensore (0-100)
+ * @return Carattere che rappresenta il colore: 'r' rosso, 'g' giallo, 'v' verde, 'b' blu, 'n' non determinato
+ */
+char riconosciColoreHV(int hue, double brightness) {
+    // Se il colore non è affidabile, restituisci 'n' (nessun colore)
+    if (!coloreAffidabile(brightness)) {
+        return 'n';
+    }
+    
+    // Classifica il colore in base all'hue con range migliorati
+    if (hue < 15 || hue >= 330) { // rosso
+        return 'r';
+    } else if (hue >= 30 && hue < 70) { // giallo - range ristretto
+        return 'g';
+    } else if (hue > 72 && hue < 150) { // verde - range specifico
+        return 'v';
+    } else if (hue >= 190 && hue < 250) { // blu
+        return 'b';
+    }
+    
+    // Se l'hue non rientra in nessun range definito
+    return 'n';
+}
+
+/**
+ * Legge il colore con il sensore frontale
+ * @return Colore rilevato: 'r' rosso, 'g' giallo, 'v' verde, 'b' blu, 'n' non determinato
+ */
+char leggiFront() {
+    
+    /**
+     * Versione migliorata della funzione leggiFront che utilizza Hue e Brightness
+     * @return Colore rilevato: 'r' rosso, 'g' giallo, 'v' verde, 'b' blu, 'n' non determinato
+     */
+    SensoreOttico2.setLightPower(POTENZA_LED_NORMALE, percent);
+    SensoreOttico2.setLight(ledState::on);
+
+    int conteggiRosso = 0;
+    int conteggioGiallo = 0;
+    int conteggioVerde = 0;
+    int conteggioBlu = 0;
+    int conteggioNonDeterminato = 0;
+
+    // Array per memorizzare i valori di ogni campione (per debug)
+    int valoriHue[NUMERO_CAMPIONI_COLORE] = {0};
+    double valoriBri[NUMERO_CAMPIONI_COLORE] = {0};
+
+    for (int i = 0; i < NUMERO_CAMPIONI_COLORE; i++) {
+        if (SensoreOttico2.isNearObject()) {
+            int hue = SensoreOttico2.hue(); 
+            double brightness = SensoreOttico2.brightness();
+            
+            // Salva i valori per debug
+            valoriHue[i] = hue;
+            valoriBri[i] = brightness;
+            
+            // Aumenta la potenza del LED se la luminosità è bassa
+            if (brightness < SOGLIA_BASSA_LUMINOSITA) {
+                SensoreOttico2.setLightPower(POTENZA_LED_BASSA_LUMINOSITA, percent);
+            }
+
+            // Usa la nuova funzione di riconoscimento colore
+            char colore = riconosciColoreHV(hue, brightness);
+            
+            // Aggiorna i conteggi in base al risultato
+            switch(colore) {
+                case 'r': conteggiRosso++; break;
+                case 'g': conteggioGiallo++; break;
+                case 'v': conteggioVerde++; break;
+                case 'b': conteggioBlu++; break;
+                case 'n': conteggioNonDeterminato++; break;
+            }
+        }
+        // Aggiungi un breve delay per stabilizzare la lettura
+        this_thread::sleep_for(milliseconds(50));
+        this_thread::sleep_for(milliseconds(RITARDO_LETTURA_COLORE));
+    }
+
+    // Visualizza i risultati
+    Brain.Screen.clearScreen();
+    Brain.Screen.setCursor(1, 1);
+
+    // Visualizza i valori HV dei campioni (debug)
+    Brain.Screen.print("HV: ");
+    for (int i = 0; i < NUMERO_CAMPIONI_COLORE; i++) {
+        if (i < 2) { // Mostra solo i primi 2 per limitare lo spazio
+            Brain.Screen.print("H:%d,B:%.1f ", valoriHue[i], valoriBri[i]);
+        }
+    }
+    Brain.Screen.newLine();
+    
+    // Visualizza i conteggi di rilevamento
+    Brain.Screen.print("R:%d G:%d V:%d B:%d N:%d", conteggiRosso, conteggioGiallo, conteggioVerde, conteggioBlu, conteggioNonDeterminato);
+    Brain.Screen.newLine();
+
+    char coloreRilevato = 'n'; // n = non determinato
+    int maxConteggio = 0;
+    
+    // Trova il colore con il massimo conteggio
+    if (conteggiRosso > maxConteggio) {
+        maxConteggio = conteggiRosso;
+        coloreRilevato = 'r';
+    }
+    if (conteggioGiallo > maxConteggio) {
+        maxConteggio = conteggioGiallo;
+        coloreRilevato = 'g';
+    }
+    if (conteggioVerde > maxConteggio) {
+        maxConteggio = conteggioVerde;
+        coloreRilevato = 'v';
+    }
+    if (conteggioBlu > maxConteggio) {
+        maxConteggio = conteggioBlu;
+        coloreRilevato = 'b';
+    }
+    
+    // Controlla che ci sia abbastanza "certezza" nel risultato
+    if (maxConteggio < NUMERO_CAMPIONI_COLORE / 3) {
+        coloreRilevato = 'n'; // Non abbastanza certezza
+        Brain.Screen.print("Colore incerto (conteggio basso)");
+    } else {
+        // Mostra il colore rilevato
+        switch(coloreRilevato) {
+            case 'r': Brain.Screen.print("Rosso"); break;
+            case 'g': Brain.Screen.print("Giallo"); break;
+            case 'v': Brain.Screen.print("Verde"); break;
+            case 'b': Brain.Screen.print("Blu"); break;
+            default: Brain.Screen.print("Non determinato"); break;
+        }
+    }
+
+    // Spegni il LED dopo l'uso
+    SensoreOttico2.setLight(ledState::off);
+    return coloreRilevato;
+}
+
+/**
+ * Funzione che implementa percorsi diversi in base al colore rilevato
+ * Gestisce percorsi specifici per rosso e giallo
+ */
 void colori() {
     for (int i = 0; i < 17; i++)
     {
@@ -297,8 +465,6 @@ void colori() {
             turn(0);
             move('f', 115);
 
-
-
         } 
         else if (colore == 'g') { // Se colore giallo
             Brain.Screen.print("GIALLO");
@@ -325,9 +491,38 @@ void colori() {
     // Visualizza la distanza totale percorsa in avanti
     Brain.Screen.newLine();
     Brain.Screen.print("Distanza totale: %d mm", distanzaTotale);
-
 }
+
+/**
+ * Programma principale
+ */
 int main() {
+    // Reset iniziale dei motori
+    braccio.resetPosition();
+    pinza.resetPosition();
+
+    // Calibrazione del sensore inerziale
+    Brain.Screen.clearScreen();
+    Brain.Screen.setCursor(1,1);
+    Brain.Screen.print("Calibrazione sensore inerziale...");
+    
+    Inertial.calibrate();
+    while(Inertial.isCalibrating()) {
+        this_thread::sleep_for(milliseconds(30));
+    }
+    
+    Brain.Screen.clearScreen();
+    Brain.Screen.setCursor(1,1);
+    Brain.Screen.print("Calibrazione completata!");
+    this_thread::sleep_for(milliseconds(1));
+
+    // Imposta l'orientamento iniziale
+    Smartdrive.setHeading(0, degrees);
+
+    // Avvia thread per il monitoraggio frontale
+    thread check = thread(checkFront);
+    
+    // Inizializzazione e lettura colore iniziale
     inizio();
 
     // Sequenza di movimenti per il percorso
@@ -342,9 +537,6 @@ int main() {
     // Esegui la sequenza in base al colore rilevato
     colori();
     
-    // Fase finale - torna alla posizione di partenza
-
-    
     // Segnala completamento e mostra distanza totale
     Brain.Screen.clearScreen();
     Brain.Screen.setCursor(1,1);
@@ -357,4 +549,4 @@ int main() {
     check.join();
     
     return 0;
-    
+}

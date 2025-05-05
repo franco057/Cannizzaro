@@ -281,123 +281,168 @@ void lascia() {
  * @return Colore rilevato: 'r' rosso, 'g' giallo, 'v' verde, 'b' blu, 'n' non determinato
  */
 char leggiFront() {
-    auto coloreAffidabile = [](double saturation, double brightness) -> bool {
+    bool coloreAffidabile(double saturation, double brightness) {
+        // I colori con bassa saturazione sono spesso grigio o bianco, non colori veri
         const double SOGLIA_SATURAZIONE_MINIMA = 20.0;
+        // Con luminosità molto bassa, i colori sono difficili da rilevare correttamente
         const double SOGLIA_LUMINOSITA_MINIMA = 10.0;
+        
+        // Saturazione minima richiesta varia in base alla luminosità
+        // Con luminosità molto alta o molto bassa, richiediamo più saturazione
         double sogliaEffettiva = SOGLIA_SATURAZIONE_MINIMA;
-
-        if (brightness < 30.0 || brightness > 90.0)
-            sogliaEffettiva *= 1.5;
-
-        if (brightness < SOGLIA_LUMINOSITA_MINIMA)
+        
+        // Richiedi più saturazione quando la luminosità è bassa o molto alta
+        if (brightness < 30.0 || brightness > 90.0) {
+            sogliaEffettiva = SOGLIA_SATURAZIONE_MINIMA * 1.5;
+        }
+        
+        // Se sia la luminosità che la saturazione sono troppo basse, il colore non è affidabile
+        if (brightness < SOGLIA_LUMINOSITA_MINIMA) {
             return false;
-
+        }
+        
         return saturation >= sogliaEffettiva;
-    };
-
-    auto riconosciColoreHSV = [&](int hue, double saturation, double brightness) -> char {
-        if (!coloreAffidabile(saturation, brightness))
+    }
+    
+    /**
+     * Riconosce il colore considerando Hue, Saturazione e Luminosità
+     * @param hue Valore dell'hue dal sensore (0-359)
+     * @param saturation Valore di saturazione dal sensore (0-100)
+     * @param brightness Valore di luminosità dal sensore (0-100)
+     * @return Carattere che rappresenta il colore: 'r' rosso, 'g' giallo, 'v' verde, 'b' blu, 'n' non determinato
+     */
+    char riconosciColoreHSV(int hue, double saturation, double brightness) {
+        // Se il colore non è affidabile, restituisci 'n' (nessun colore)
+        if (!coloreAffidabile(saturation, brightness)) {
             return 'n';
-
-        if (hue < 15 || hue >= 330)
+        }
+        
+        // Classifica il colore in base all'hue con range migliorati
+        if (hue < 15 || hue >= 330) { // rosso
             return 'r';
-        else if (hue >= 30 && hue < 70)
+        } else if (hue >= 30 && hue < 70) { // giallo - range ristretto
             return 'g';
-        else if (hue >= 110 && hue < 150)
+        } else if (hue > 72 && hue < 150) { // verde - range specifico
             return 'v';
-        else if (hue >= 190 && hue < 250)
+        } else if (hue >= 190 && hue < 250) { // blu
             return 'b';
-
+        }
+        
+        // Se l'hue non rientra in nessun range definito
         return 'n';
-    };
-
-    SensoreOttico2.setLightPower(POTENZA_LED_NORMALE, percent);
-    SensoreOttico2.setLight(ledState::on);
-
-    int conteggiRosso = 0;
-    int conteggioGiallo = 0;
-    int conteggioVerde = 0;
-    int conteggioBlu = 0;
-    int conteggioNonDeterminato = 0;
-
-    int valoriHue[NUMERO_CAMPIONI_COLORE] = {0};
-    double valoriSat[NUMERO_CAMPIONI_COLORE] = {0};
-    double valoriBri[NUMERO_CAMPIONI_COLORE] = {0};
-
-    for (int i = 0; i < NUMERO_CAMPIONI_COLORE; i++) {
-        if (SensoreOttico2.isNearObject()) {
-            int hue = SensoreOttico2.hue(); 
-            double brightness = SensoreOttico2.brightness();
-            double saturation = SensoreOttico2.saturation();
-
-            valoriHue[i] = hue;
-            valoriSat[i] = saturation;
-            valoriBri[i] = brightness;
-
-            if (brightness < SOGLIA_BASSA_LUMINOSITA) {
-                SensoreOttico2.setLightPower(POTENZA_LED_BASSA_LUMINOSITA, percent);
+    }
+    
+    /**
+     * Versione migliorata della funzione leggiFront che utilizza HSV
+     * @return Colore rilevato: 'r' rosso, 'g' giallo, 'v' verde, 'b' blu, 'n' non determinato
+     */
+    char leggiFrontHSV() {
+        SensoreOttico2.setLightPower(POTENZA_LED_NORMALE, percent);
+        SensoreOttico2.setLight(ledState::on);
+    
+        int conteggiRosso = 0;
+        int conteggioGiallo = 0;
+        int conteggioVerde = 0;
+        int conteggioBlu = 0;
+        int conteggioNonDeterminato = 0;
+    
+        // Array per memorizzare i valori di ogni campione (per debug)
+        int valoriHue[NUMERO_CAMPIONI_COLORE] = {0};
+        double valoriSat[NUMERO_CAMPIONI_COLORE] = {0};
+        double valoriBri[NUMERO_CAMPIONI_COLORE] = {0};
+    
+        for (int i = 0; i < NUMERO_CAMPIONI_COLORE; i++) {
+            if (SensoreOttico2.isNearObject()) {
+                int hue = SensoreOttico2.hue(); 
+                double brightness = SensoreOttico2.brightness();
+                double saturation = SensoreOttico2.saturation();
+                
+                // Salva i valori per debug
+                valoriHue[i] = hue;
+                valoriSat[i] = saturation;
+                valoriBri[i] = brightness;
+                
+                // Aumenta la potenza del LED se la luminosità è bassa
+                if (brightness < SOGLIA_BASSA_LUMINOSITA) {
+                    SensoreOttico2.setLightPower(POTENZA_LED_BASSA_LUMINOSITA, percent);
+                }
+    
+                // Usa la nuova funzione di riconoscimento colore
+                char colore = riconosciColoreHSV(hue, saturation, brightness);
+                
+                // Aggiorna i conteggi in base al risultato
+                switch(colore) {
+                    case 'r': conteggiRosso++; break;
+                    case 'g': conteggioGiallo++; break;
+                    case 'v': conteggioVerde++; break;
+                    case 'b': conteggioBlu++; break;
+                    case 'n': conteggioNonDeterminato++; break;
+                }
             }
-
-            char colore = riconosciColoreHSV(hue, saturation, brightness);
-
-            switch(colore) {
-                case 'r': conteggiRosso++; break;
-                case 'g': conteggioGiallo++; break;
-                case 'v': conteggioVerde++; break;
-                case 'b': conteggioBlu++; break;
-                default: conteggioNonDeterminato++; break;
+            // Aggiungi un breve delay per stabilizzare la lettura
+            this_thread::sleep_for(milliseconds(50));
+            this_thread::sleep_for(milliseconds(RITARDO_LETTURA_COLORE));
+        }
+    
+        // Visualizza i risultati
+        Brain.Screen.clearScreen();
+        Brain.Screen.setCursor(1, 1);
+    
+        // Visualizza i valori HSV dei campioni (debug)
+        Brain.Screen.print("HSV: ");
+        for (int i = 0; i < NUMERO_CAMPIONI_COLORE; i++) {
+            if (i < 2) { // Mostra solo i primi 2 per limitare lo spazio
+                Brain.Screen.print("H:%d,S:%.1f,B:%.1f ", valoriHue[i], valoriSat[i], valoriBri[i]);
             }
         }
-
-        this_thread::sleep_for(milliseconds(50 + RITARDO_LETTURA_COLORE));
-    }
-
-    Brain.Screen.clearScreen();
-    Brain.Screen.setCursor(1, 1);
-    Brain.Screen.print("HSV: ");
-    for (int i = 0; i < 2; i++) {
-        Brain.Screen.print("H:%d S:%.1f B:%.1f  ", valoriHue[i], valoriSat[i], valoriBri[i]);
-    }
-    Brain.Screen.newLine();
-    Brain.Screen.print("R:%d G:%d V:%d B:%d N:%d", conteggiRosso, conteggioGiallo, conteggioVerde, conteggioBlu, conteggioNonDeterminato);
-    Brain.Screen.newLine();
-
-    char coloreFinale = 'n';
-    int maxConteggio = 0;
-
-    if (conteggiRosso > maxConteggio) {
-        maxConteggio = conteggiRosso;
-        coloreFinale = 'r';
-    }
-    if (conteggioGiallo > maxConteggio) {
-        maxConteggio = conteggioGiallo;
-        coloreFinale = 'g';
-    }
-    if (conteggioVerde > maxConteggio) {
-        maxConteggio = conteggioVerde;
-        coloreFinale = 'v';
-    }
-    if (conteggioBlu > maxConteggio) {
-        maxConteggio = conteggioBlu;
-        coloreFinale = 'b';
-    }
-
-    if (maxConteggio < NUMERO_CAMPIONI_COLORE / 3) {
-        coloreFinale = 'n';
-        Brain.Screen.print("Colore incerto");
-    } else {
-        switch (coloreFinale) {
-            case 'r': Brain.Screen.print("Rosso"); break;
-            case 'g': Brain.Screen.print("Giallo"); break;
-            case 'v': Brain.Screen.print("Verde"); break;
-            case 'b': Brain.Screen.print("Blu"); break;
-            default: Brain.Screen.print("Non determinato"); break;
+        Brain.Screen.newLine();
+        
+        // Visualizza i conteggi di rilevamento
+        Brain.Screen.print("R:%d G:%d V:%d B:%d N:%d", conteggiRosso, conteggioGiallo, conteggioVerde, conteggioBlu, conteggioNonDeterminato);
+        Brain.Screen.newLine();
+    
+        char coloreRilevato = 'n'; // n = non determinato
+        int maxConteggio = 0;
+        
+        // Trova il colore con il massimo conteggio
+        if (conteggiRosso > maxConteggio) {
+            maxConteggio = conteggiRosso;
+            coloreRilevato = 'r';
         }
+        if (conteggioGiallo > maxConteggio) {
+            maxConteggio = conteggioGiallo;
+            coloreRilevato = 'g';
+        }
+        if (conteggioVerde > maxConteggio) {
+            maxConteggio = conteggioVerde;
+            coloreRilevato = 'v';
+        }
+        if (conteggioBlu > maxConteggio) {
+            maxConteggio = conteggioBlu;
+            coloreRilevato = 'b';
+        }
+        
+        // Controlla che ci sia abbastanza "certezza" nel risultato
+        if (maxConteggio < NUMERO_CAMPIONI_COLORE / 3) {
+            coloreRilevato = 'n'; // Non abbastanza certezza
+            Brain.Screen.print("Colore incerto (conteggio basso)");
+        } else {
+            // Mostra il colore rilevato
+            switch(coloreRilevato) {
+                case 'r': Brain.Screen.print("Rosso"); break;
+                case 'g': Brain.Screen.print("Giallo"); break;
+                case 'v': Brain.Screen.print("Verde"); break;
+                case 'b': Brain.Screen.print("Blu"); break;
+                default: Brain.Screen.print("Non determinato"); break;
+            }
+        }
+    
+        // Spegni il LED dopo l'uso
+        SensoreOttico2.setLight(ledState::off);
+        return coloreRilevato;
     }
-
-    SensoreOttico2.setLight(ledState::off);
-    return coloreFinale;
 }
+
 /**
  * Funzione che implementa percorsi diversi in base al colore rilevato
  * Gestisce percorsi specifici per rosso e giallo
@@ -503,6 +548,7 @@ int main() {
     move('f', 380);
     turn(90);
     move('f', 75);
+
     
     // Esegui la sequenza in base al colore rilevato
     colori();
