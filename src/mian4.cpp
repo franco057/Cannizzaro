@@ -31,12 +31,32 @@ const double BRACCIO_ABBASSATO = 120.0;
 const int VELOCITA_BRACCIO = 20;
 const int VELOCITA_PINZA = 20;
 
-// Costanti per il movimento
+// Costanti per il movimento - aggiornate in base ai dati TAVOLA 1 e 2
 const double FATTORE_CORREZIONE_AVANTI = 0.3333;
 const double FATTORE_CORREZIONE_INDIETRO = 0.3333;
 const double FATTORE_CORREZIONE_ROTAZIONE = 1.0;
 const int VELOCITA_ROTAZIONE = 25;
 const int VELOCITA_AVANZAMENTO = 35;
+
+// Dimensioni del campo da TAVOLA 1
+const int LARGHEZZA_CAMPO = 152; // cm
+const int LUNGHEZZA_CAMPO = 274; // cm
+const int LATO_AREA_PARTENZA = 30; // cm - Area di partenza/arrivo
+const int LARGHEZZA_AREA_STALLO = 40; // cm - Area blu stallo automobili
+const int LUNGHEZZA_AREA_STALLO = 100; // cm - Area blu stallo automobili
+const int LARGHEZZA_COLONNINA = 20; // cm - Colonnine rosse
+const int LUNGHEZZA_COLONNINA = 50; // cm - Colonnine rosse
+const int LARGHEZZA_OFFICINA = 20; // cm - Officine verde/gialla
+const int LUNGHEZZA_OFFICINA = 50; // cm - Officine verde/gialla
+
+// Distanze specifiche da TAVOLA 1
+const int DISTANZA_AREA_STALLO_X = 41; // Distanza dall'area di partenza all'area stallo (asse X)
+const int DISTANZA_AREA_STALLO_Y = 64; // Distanza dall'area di partenza all'area stallo (asse Y)
+const int DISTANZA_COLONNINA1_X = 61; // Distanza approssimativa per la prima colonnina
+const int DISTANZA_COLONNINA2_X = 132; // Distanza approssimativa per la seconda colonnina
+const int DISTANZA_COLONNINA3_X = 203; // Distanza approssimativa per la terza colonnina
+const int DISTANZA_OFFICINA_GIALLA_Y = 20; // Distanza Y dell'officina gialla
+const int DISTANZA_OFFICINA_VERDE_Y = 50 + LARGHEZZA_CAMPO - 20; // Distanza Y dell'officina verde
 
 // Costanti per i sensori
 const int POTENZA_LED_NORMALE = 50;
@@ -55,12 +75,13 @@ bool verde = false;
 int c1,c2,c3;
 int distanzaTotale = 0; // Contatore distanza totale avanti
 
-// Nuove variabili per la strategia di percorso
+// Variabili per la strategia di percorso
 int autoRosseRaccolte = 0;
 int autoGialleRaccolte = 0;
 int autoBluRaccolte = 0;
 int autoInColonnina1 = 0;
 int autoInColonnina2 = 0;
+int autoInColonnina3 = 0;
 bool officinaVerde = false; // false = officina gialla, true = officina verde
 int posizioneX = 0; // Posizione X del robot (per mappatura)
 int posizioneY = 0; // Posizione Y del robot (per mappatura)
@@ -354,9 +375,9 @@ char riconosciColoreHV(int hue, double brightness) {
     // Classifica il colore in base all'hue con range migliorati
     if (hue < 15 || hue >= 330) { // rosso
         return 'r';
-    } else if (hue >= 30 && hue < 70) { // giallo - range ristretto
+    } else if (hue >= 30 && hue < 60) { // giallo - range ristretto
         return 'g';
-    } else if (hue > 72 && hue < 150) { // verde - range specifico
+    } else if (hue >= 60 && hue < 150) { // verde - range specifico
         return 'v';
     } else if (hue >= 190 && hue < 250) { // blu
         return 'b';
@@ -475,92 +496,126 @@ char leggiFront() {
 
 /**
  * Percorso verso la colonnina di ricarica 1 (per auto rosse e gialle)
- * Implementa il Percorso 2 dal documento di strategia
+ * Aggiornato in base alla TAVOLA 1
  */
 void percorsoColonnina1() {
     // Percorso verso colonnina 1
-    move('b', 115);
+    move('b', 120);
     turn(270);
-    move('f', 70);
+    move('f', 65); // Aggiornato in base alla TAVOLA 1
     lascia();
     
     // Ritorno
-    move('b', 50);
+    move('b', 55);
     turn(90);
-    move('f', 80);
+    move('f', 75);
     turn(0);
-    move('f', 115);
+    move('f', 120);
 }
 
 /**
  * Percorso verso la colonnina di ricarica 2 (per auto rosse e gialle quando colonnina 1 è piena)
- * Versione alternativa della colonnina 1 con parametri adattati
+ * Aggiornato in base alla TAVOLA 1
  */
 void percorsoColonnina2() {
-    // Percorso verso colonnina 2 - simile alla 1 ma con diversi parametri
-    move('b', 115);
+    // Percorso verso colonnina 2
+    move('b', 120);
     turn(270);
-    move('f', 150); // Distanza maggiore per raggiungere la colonnina 2
+    move('f', 135); // Distanza maggiore per raggiungere la colonnina 2
     lascia();
     
     // Ritorno
-    move('b', 50);
+    move('b', 55);
     turn(90);
-    move('f', 160); // Distanza maggiore per tornare
+    move('f', 145);
     turn(0);
-    move('f', 115);
+    move('f', 120);
+}
+
+/**
+ * Percorso verso la colonnina di ricarica 3 (per auto rosse e gialle quando colonnina 2 è piena)
+ * Aggiunto in base alla TAVOLA 1 che mostra 3 colonnine
+ */
+void percorsoColonnina3() {
+    // Percorso verso colonnina 3
+    move('b', 120);
+    turn(270);
+    move('f', 205); // Distanza per raggiungere la colonnina 3
+    lascia();
+    
+    // Ritorno
+    move('b', 55);
+    turn(90);
+    move('f', 215);
+    turn(0);
+    move('f', 120);
 }
 
 /**
  * Percorso verso l'officina gialla per le auto blu
- * Implementa il Percorso 3 dal documento di strategia
+ * Aggiornato in base alla TAVOLA 1
  */
 void percorsoOfficinaGialla() {
-    // Percorso verso officina gialla
+    // Percorso verso officina gialla - coordinati aggiornati
     move('b', 100);
     turn(180);
-    move('f', 250);
+    move('f', 220); // Adattato in base ai dati della TAVOLA 1
     lascia();
     
     // Ritorno
-    move('b', 250);
+    move('b', 220);
     turn(0);
     move('f', 100);
 }
 
 /**
  * Percorso verso l'officina verde per le auto blu
- * Implementa il Percorso 4 dal documento di strategia
+ * Aggiornato in base alla TAVOLA 1
  */
 void percorsoOfficinaVerde() {
-    // Percorso verso officina verde
+    // Percorso verso officina verde - coordinati aggiornati
     move('b', 100);
     turn(0);
-    move('f', 250);
+    move('f', 220); // Adattato in base ai dati della TAVOLA 1
     lascia();
     
     // Ritorno
-    move('b', 250);
+    move('b', 220);
     turn(180);
     move('f', 100);
 }
 
 /**
  * Funzione per saltare le auto verdi
- * Implementa il Percorso 5 dal documento di strategia
+ * Aggiornato in base alla TAVOLA 2 per la disposizione degli oggetti
  */
 void saltaAutoVerde() {
+    // Movimento ottimizzato per saltare un'auto verde in base alla TAVOLA 2
     move('b', 40);
     turn(0);
     move('f', 100);
     turn(90);
-    move('f', 40);
+    move('f', 45); // Distanza aggiornata in base alla TAVOLA 2
 }
 
 /**
- * Funzione che implementa percorsi diversi in base al colore rilevato
- * Gestisce i percorsi per le 18 auto nel parcheggio
+ * Navigazione iniziale verso l'area di stallo
+ * Aggiornato in base alla TAVOLA 1 e 2
  */
+void navigaAreaStallo() {
+    // Naviga dall'area di partenza all'area di stallo (blu)
+    move('f', 350);
+    turn(90);
+    move('f', 170);
+    turn(0);
+    move('f', 380);
+    turn(90);
+    move('f', 75);
+}
+
+
+
+
 void colori() {
     for (int i = 0; i < 18; i++) { // 18 auto totali nel parcheggio
         // Rileva il colore dell'oggetto
@@ -576,57 +631,66 @@ void colori() {
                 Brain.Screen.print("ROSSA");
                 Brain.Screen.newLine();
                 
-                // Verifica se la colonnina è piena prima di procedere
+                // Verifica se le colonnine sono piene prima di procedere
                 if (autoInColonnina1 < 5) {
-                    Brain.Screen.print("Trasporto a Colonnina 1 (%d/5)", autoInColonnina1 + 1);
+                    Brain.Screen.print("Trasporto a Colonnina 1");
                     prendi();
                     percorsoColonnina1();
                     autoInColonnina1++;
                     autoRosseRaccolte++;
                 } else if (autoInColonnina2 < 5) {
-                    Brain.Screen.print("Trasporto a Colonnina 2 (%d/5)", autoInColonnina2 + 1);
+                    Brain.Screen.print("Trasporto a Colonnina 2");
                     prendi();
                     percorsoColonnina2();
                     autoInColonnina2++;
                     autoRosseRaccolte++;
+                } else if (autoInColonnina3 < 5) {
+                    Brain.Screen.print("Trasporto a Colonnina 3");
+                    prendi();
+                    percorsoColonnina3();
+                    autoInColonnina3++;
+                    autoRosseRaccolte++;
                 } else {
-                    Brain.Screen.print("Colonnine piene! Auto non raccolta");
-                    // Salta l'auto come se fosse verde
-                    saltaAutoVerde();
+                    Brain.Screen.print("Tutte le colonnine piene, salto auto");
+                    saltaAutoVerde(); // Usa la funzione di salto per evitare l'auto
                 }
                 break;
-            
+                
             case 'g': // Se colore giallo
                 Brain.Screen.print("GIALLA");
                 Brain.Screen.newLine();
                 
-                // Verifica se la colonnina è piena prima di procedere
+                // Verifica se le colonnine sono piene prima di procedere
                 if (autoInColonnina1 < 5) {
-                    Brain.Screen.print("Trasporto a Colonnina 1 (%d/5)", autoInColonnina1 + 1);
+                    Brain.Screen.print("Trasporto a Colonnina 1");
                     prendi();
                     percorsoColonnina1();
                     autoInColonnina1++;
                     autoGialleRaccolte++;
                 } else if (autoInColonnina2 < 5) {
-                    Brain.Screen.print("Trasporto a Colonnina 2 (%d/5)", autoInColonnina2 + 1);
+                    Brain.Screen.print("Trasporto a Colonnina 2");
                     prendi();
                     percorsoColonnina2();
                     autoInColonnina2++;
                     autoGialleRaccolte++;
+                } else if (autoInColonnina3 < 5) {
+                    Brain.Screen.print("Trasporto a Colonnina 3");
+                    prendi();
+                    percorsoColonnina3();
+                    autoInColonnina3++;
+                    autoGialleRaccolte++;
                 } else {
-                    Brain.Screen.print("Colonnine piene! Auto non raccolta");
-                    // Salta l'auto come se fosse verde
-                    saltaAutoVerde();
+                    Brain.Screen.print("Tutte le colonnine piene, salto auto");
+                    saltaAutoVerde(); // Usa la funzione di salto per evitare l'auto
                 }
                 break;
-            
+                
             case 'b': // Se colore blu
                 Brain.Screen.print("BLU");
                 Brain.Screen.newLine();
                 
-                // Trasporta all'officina corretta
+                // Trasporta all'officina determinata all'inizio (verde o gialla)
                 prendi();
-                
                 if (officinaVerde) {
                     Brain.Screen.print("Trasporto a Officina VERDE");
                     percorsoOfficinaVerde();
@@ -634,185 +698,149 @@ void colori() {
                     Brain.Screen.print("Trasporto a Officina GIALLA");
                     percorsoOfficinaGialla();
                 }
-                
                 autoBluRaccolte++;
                 break;
-            
-            case 'v': // Se colore verde
-                Brain.Screen.print("VERDE");
-                Brain.Screen.newLine();
-                Brain.Screen.print("NON TOCCARE");
                 
-                // Implementa il percorso 5 per saltare l'auto verde
+            case 'v': // Se colore verde
+                Brain.Screen.print("VERDE - Salto");
+                Brain.Screen.newLine();
+                // Le auto verdi sono da ignorare
                 saltaAutoVerde();
                 break;
-            
+                
             default: // Se colore non determinato
                 Brain.Screen.print("NON DETERMINATO");
                 Brain.Screen.newLine();
                 
-                // Ruota leggermente per provare a rileggere il colore
-                turn(87);
-                i--; // Riprova con la stessa auto
+                // Tentativo di nuova lettura con maggiore potenza LED
+                SensoreOttico2.setLightPower(POTENZA_LED_BASSA_LUMINOSITA, percent);
+                colore = leggiFront();
+                
+                // Se ancora non determinato, assumiamo sia un'auto da saltare
+                if (colore == 'n') {
+                    Brain.Screen.print("Ancora non determinato - Salto");
+                    saltaAutoVerde();
+                } else {
+                    // Torna all'inizio del ciclo per processare questo nuovo colore
+                    i--; // Decrementa i per ripetere il ciclo con lo stesso indice
+                }
                 break;
         }
         
-        // Mostra statistiche correnti dopo ogni auto processata
+        // Stampa statistiche dopo ogni auto
         Brain.Screen.newLine();
-        Brain.Screen.print("Auto raccolte - R:%d G:%d B:%d", 
-                          autoRosseRaccolte, autoGialleRaccolte, autoBluRaccolte);
+        Brain.Screen.print("Stat: R:%d G:%d B:%d", autoRosseRaccolte, autoGialleRaccolte, autoBluRaccolte);
         Brain.Screen.newLine();
-        Brain.Screen.print("Occupazione colonnine: %d/5, %d/5", 
-                          autoInColonnina1, autoInColonnina2);
+        Brain.Screen.print("Col: C1:%d C2:%d C3:%d", autoInColonnina1, autoInColonnina2, autoInColonnina3);
         
-        // Breve pausa tra un'auto e l'altra
-        this_thread::sleep_for(milliseconds(500));
+        // Breve pausa tra le auto
+        this_thread::sleep_for(milliseconds(1000));
     }
+    
+    // Al termine di tutte le auto, torna all'area di partenza
+    Brain.Screen.clearScreen();
+    Brain.Screen.setCursor(1, 1);
+    Brain.Screen.print("Completato! Ritorno all'area di partenza");
+    
+    // Calcola percorso di ritorno all'area di partenza
+    // Questo è un esempio semplificato, andrebbe adattato in base alla posizione finale
+    turn(180);
+    move('f', 200);
+    turn(270);
+    move('f', 200);
+    
+    // Statistiche finali
+    Brain.Screen.clearScreen();
+    Brain.Screen.setCursor(1, 1);
+    Brain.Screen.print("GARA COMPLETATA!");
+    Brain.Screen.newLine();
+    Brain.Screen.print("Auto rosse: %d", autoRosseRaccolte);
+    Brain.Screen.newLine();
+    Brain.Screen.print("Auto gialle: %d", autoGialleRaccolte);
+    Brain.Screen.newLine();
+    Brain.Screen.print("Auto blu: %d", autoBluRaccolte);
+    Brain.Screen.newLine();
+    Brain.Screen.print("Totale colonnine: %d", autoInColonnina1 + autoInColonnina2 + autoInColonnina3);
 }
 
 /**
- * Calcola il percorso di ritorno all'area di partenza
- * Implementa la Fase 5 del percorso
+ * Funzione per inizializzazione del robot
  */
-void percorsoRitornoBase() {
-    // Visualizza info sul percorso di ritorno
-    Brain.Screen.clearScreen();
-    Brain.Screen.setCursor(1, 1);
-    Brain.Screen.print("Fase 5: Ritorno all'area di partenza");
-    Brain.Screen.newLine();
-
-    // Statistiche finali
-    Brain.Screen.print("Auto raccolte - R:%d G:%d B:%d", 
-                     autoRosseRaccolte, autoGialleRaccolte, autoBluRaccolte);
-    Brain.Screen.newLine();
-    Brain.Screen.print("Occupazione colonnine: %d/5, %d/5", 
-                     autoInColonnina1, autoInColonnina2);
-    Brain.Screen.newLine();
-    
-    // Verifica la posizione attuale (simulata tramite contatori)
-    // Se siamo molto lontani dalla posizione originale
-    if (abs(posizioneX) > 200 || abs(posizioneY) > 200) {
-        // Ritorno con percorso più complesso
-        turn(0); // Orienta il robot verso la direzione iniziale
-        
-        // Se siamo lontani in X, prima correggiamo questo
-        if (abs(posizioneX) > 50) {
-            int distanzaX = abs(posizioneX);
-            if (posizioneX > 0) {
-                turn(180); // Direzione opposta se positivo
-            } else {
-                turn(0);   // Direzione originale se negativo
-            }
-            move('f', distanzaX);
-        }
-        
-        // Poi correggiamo Y se necessario
-        if (abs(posizioneY) > 50) {
-            int distanzaY = abs(posizioneY);
-            if (posizioneY > 0) {
-                turn(270); // Sud
-            } else {
-                turn(90);  // Nord
-            }
-            move('f', distanzaY);
-        }
-    } else {
-        // Ritorno diretto se siamo vicini
-        // Calcola l'angolo verso la posizione di partenza
-        double angolo = atan2(-posizioneY, -posizioneX) * 180.0 / 3.14159;
-        // Converti in angolo VEX (0-359)
-        if (angolo < 0) angolo += 360;
-        
-        turn(static_cast<int>(angolo));
-        
-        // Calcola la distanza diretta alla posizione di partenza
-        double distanza = sqrt(posizioneX * posizioneX + posizioneY * posizioneY);
-        move('f', static_cast<int>(distanza));
-    }
-    
-    // Esegui il ritorno finale all'area di partenza
-    turn(90); // Orienta verso l'area di partenza
-    
-    // Assicurati che il braccio sia sollevato e la pinza chiusa per il ritorno
-    controllaRobotBraccio('u');
-    controllaRobotBraccio('c');
-    
-    // Messaggio di completamento
-    Brain.Screen.clearScreen();
-    Brain.Screen.setCursor(1, 1);
-    Brain.Screen.print("Missione completata!");
-    Brain.Screen.newLine();
-    Brain.Screen.print("Auto rosse: %d, gialle: %d, blu: %d", 
-                     autoRosseRaccolte, autoGialleRaccolte, autoBluRaccolte);
-    Brain.Screen.newLine();
-    Brain.Screen.print("Distanza totale: %d mm", distanzaTotale);
-}
-int main() {
-
-    // Visualizza messaggio di inizio
-    Brain.Screen.clearScreen();
-    Brain.Screen.setCursor(1, 1);
-    Brain.Screen.print("Robot Parcheggio - Avvio");
-    this_thread::sleep_for(milliseconds(1000));
-    
-    // Inizializza i sensori e i motori
-    pinza.resetPosition();
-    braccio.resetPosition();
-    
-    // Calibrazione del sensore inerziale
-    Brain.Screen.print(" - Calibrazione sensore inerziale...");
+void inizializzaRobot() {
+    // Inizializza il sensore inerziale
     Inertial.calibrate();
-    // Attendi completamento calibrazione
+    // Attendi che la calibrazione sia completa
     while(Inertial.isCalibrating()) {
         this_thread::sleep_for(milliseconds(100));
     }
-    Brain.Screen.print("Completata");
     
-    // Prepara il braccio e la pinza
-    controllaRobotBraccio('u'); // Alza il braccio
-    controllaRobotBraccio('c'); // Chiudi la pinza
+    // Inizializza le posizioni del braccio e della pinza
+    braccio.setPosition(0, degrees);
+    pinza.setPosition(0, degrees);
     
-    // Avvia thread per il controllo degli ostacoli frontali
+    // Posizione iniziale di partenza
+    controllaRobotBraccio('u'); // Alza braccio
+    controllaRobotBraccio('c'); // Chiudi pinza
+    
+    // Reset dei contatori
+    autoRosseRaccolte = 0;
+    autoGialleRaccolte = 0;
+    autoBluRaccolte = 0;
+    autoInColonnina1 = 0;
+    autoInColonnina2 = 0;
+    autoInColonnina3 = 0;
+    
+    // Inizializza posizione
+    posizioneX = 0;
+    posizioneY = 0;
+    
+    // Visualizza messaggio di pronto
+    Brain.Screen.clearScreen();
+    Brain.Screen.setCursor(1, 1);
+    Brain.Screen.print("Robot pronto!");
+    Brain.Screen.newLine();
+    Brain.Screen.print("Premere un tasto per iniziare");
+    
+    // Attendi input utente per iniziare
+    while(!Brain.Screen.pressing()) {
+        this_thread::sleep_for(milliseconds(100));
+    }
+    Brain.Screen.clearScreen();
+}
+
+/**
+ * Entry point del programma
+ */
+int main() {
+    // Configura il controller del cervello
+    Brain.Screen.setFont(mono12);
+    Brain.Screen.clearScreen();
+    Brain.Screen.setCursor(1, 1);
+    Brain.Screen.print("Avvio robot...");
+    
+    // Inizializza thread per rilevamento ostacoli
     thread checkFrontThread(checkFront);
     
-    // Fase 1: Inizializzazione e rilevamento area di partenza
-    Brain.Screen.clearScreen();
-    Brain.Screen.setCursor(1, 1);
-    Brain.Screen.print("Fase 1: Rilevamento area di partenza");
+    // Inizializza il robot
+    inizializzaRobot();
     
-    inizio(); // Rileva il colore dell'area di partenza
+    // Esegui la funzione di inizio per determinare il colore dell'area
+    inizio();
     
-    move('f', 350);
-    turn(90);
-    move('f', 170);
-    turn(0);
-    move('f', 380);
-    turn(90);
-    move('f', 75);
-    // Fase 2-4: Gestione delle auto nel parcheggio
-    Brain.Screen.clearScreen();
-    Brain.Screen.setCursor(1, 1);
-    Brain.Screen.print("Fase 2-4: Elaborazione percorso auto");
+    // Naviga fino all'area di stallo
+    navigaAreaStallo();
     
-    colori(); // Elabora tutte le 18 auto
+    // Esegui la funzione di gestione colori per elaborare tutte le auto
+    colori();
     
-    // Fase 5: Ritorno all'area di partenza
-    percorsoRitornoBase();
-    
-    // Termina il thread di controllo
+    // Termina il thread di rilevamento ostacoli
     threadAttivo = false;
-    
     checkFrontThread.join();
     
-    // Messaggio finale
+    // Visualizza messaggio di completamento
     Brain.Screen.clearScreen();
     Brain.Screen.setCursor(1, 1);
-    Brain.Screen.print("Programma terminato");
-    Brain.Screen.newLine();
-    Brain.Screen.print("Auto raccolte: R:%d G:%d B:%d", 
-                      autoRosseRaccolte, autoGialleRaccolte, autoBluRaccolte);
-    Brain.Screen.newLine();
-    Brain.Screen.print("Distanza totale: %d mm", distanzaTotale);
-    ,mn
+    Brain.Screen.print("Programma completato!");
+    
     return 0;
 }
