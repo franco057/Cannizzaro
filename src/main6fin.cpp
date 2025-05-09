@@ -298,30 +298,30 @@ this_thread::sleep_for(milliseconds(50));
 distanzaTotale += distanza; // Aggiorna contatore distanza
 }
 else if (direzione == 'b') {
-// Per il movimento all'indietro
-Smartdrive.driveFor(reverse, distanzaCorretta, mm, velBase, rpm, false);
+    // Per il movimento all'indietro
+    Smartdrive.driveFor(reverse, distanzaCorretta, mm, velBase, rpm, false);
 
-// Loop per la correzione durante il movimento
-while (Smartdrive.isMoving()) {
-// Ottieni l'orientamento attuale e calcola l'errore
-float currentHeading = getCorrectedHeading();
-float headingError = targetHeading - currentHeading;
+    // Loop per la correzione durante il movimento
+    while (Smartdrive.isMoving()) {
+    // Ottieni l'orientamento attuale e calcola l'errore
+        float currentHeading = getCorrectedHeading();
+        float headingError = targetHeading - currentHeading;
 
-// Normalizza l'errore
-if (headingError > 180) headingError -= 360;
-if (headingError < -180) headingError += 360;
+        // Normalizza l'errore
+        if (headingError > 180) headingError -= 360;
+        if (headingError < -180) headingError += 360;
 
-// Applica una correzione proporzionale (invertita per il reverse)
-if (fabs(headingError) > SogliaErroreHeading) {
-int correzione = int(Kp * headingError);
-leftMotors.setVelocity(velBase - correzione, percent);
-rightMotors.setVelocity(velBase + correzione, percent);
-}
+        // Applica una correzione proporzionale (invertita per il reverse)
+        if (fabs(headingError) > SogliaErroreHeading) {
+            int correzione = int(Kp * headingError);
+            leftMotors.setVelocity(velBase - correzione, percent);
+            rightMotors.setVelocity(velBase + correzione, percent);
+        }
 
-// Breve pausa
-this_thread::sleep_for(milliseconds(10));
-}
-}
+        // Breve pausa
+        this_thread::sleep_for(milliseconds(10));
+        }
+    }
 }
 
 /**
