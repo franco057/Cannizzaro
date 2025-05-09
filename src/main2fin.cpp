@@ -24,8 +24,8 @@ inertial Inertial = inertial(PORT7);
 smartdrive Smartdrive = smartdrive(leftMotors, rightMotors, Inertial, 100.0, 260.9, 127.3, mm);
 
 // Costanti per le posizioni
-const double PINZA_APERTA = -67.5;
-const double PINZA_CHIUSA = 60.5;
+const double PINZA_APERTA = -55;
+const double PINZA_CHIUSA = 0;
 const double BRACCIO_ALZATO = 35.5;
 const double BRACCIO_ABBASSATO = 120.0;
 const int VELOCITA_BRACCIO = 20;
@@ -54,6 +54,7 @@ bool giallo = false;
 bool verde = false;
 int c1,c2,c3;
 int distanzaTotale = 0; // Contatore distanza totale avanti
+int conta = 0;
 
 // Espansione triport
 triport expander = triport(PORT3);
@@ -432,6 +433,11 @@ char leggiFront() {
     return coloreRilevato;
 }
 
+void return1(){
+    int dp=conta*100;
+
+    return dp;
+}
 /**
  * Funzione che implementa percorsi diversi in base al colore rilevato
  * Gestisce percorsi specifici per rosso e giallo
@@ -442,6 +448,7 @@ void colori() {
         // Rileva il colore dell'oggetto
         char colore = leggiFront();
         
+
         // Visualizza il colore rilevato e implementa percorsi diversi
         Brain.Screen.clearScreen();
         Brain.Screen.setCursor(1, 1);
@@ -451,18 +458,18 @@ void colori() {
             Brain.Screen.print("ROSSO");
             Brain.Screen.newLine();
             Brain.Screen.print("Eseguendo percorso ROSSO");
+            conta=conta+1;
             
-            // Percorso specifico per oggetto rosso
             prendi();
             move('b', 115);
             turn(270);
-            move('f', 70);
+            move('f', return1());
             lascia();
             
             // Ritorno
             move('b', 50);
             turn(90);
-            move('f', 80);
+            move('f', return1());
             turn(0);
             move('f', 115);
 
@@ -471,14 +478,27 @@ void colori() {
             Brain.Screen.print("GIALLO");
             Brain.Screen.newLine();
             Brain.Screen.print("Eseguendo percorso GIALLO");
+            conta=conta+1;
+
+            prendi();
+            move('b', 115);
+            turn(270);
+            move('f', return1());
+            lascia();
             
-            // Percorso specifico per oggetto giallo
+            // Ritorno
+            move('b', 50);
+            turn(90);
+            move('f', return1());
+            turn(0);
+            move('f', 115);
 
         }
         else if (colore=='v') {
             Brain.Screen.print("VERDE ");
             Brain.Screen.newLine();
             Brain.Screen.print("NON TOCCARE");
+            conta=conta+1;
             move('b', 40);
             turn(0);
             move('f', 100);
@@ -489,9 +509,7 @@ void colori() {
             turn(87);
         }
     }
-    // Visualizza la distanza totale percorsa in avanti
-    Brain.Screen.newLine();
-    Brain.Screen.print("Distanza totale: %d mm", distanzaTotale);
+    
 }
 
 /**
