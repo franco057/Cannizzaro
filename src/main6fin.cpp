@@ -1,6 +1,6 @@
 #include "vex.h"
 #include <thread>
-
+#include <cmath>
 using namespace vex;
 using namespace std::chrono;
 
@@ -10,7 +10,22 @@ optical SensoreOttico(PORT2);
 optical SensoreOttico2(PORT6);
 motor braccio(PORT9, gearSetting::ratio18_1, false);
 motor pinza(PORT4, gearSetting::ratio18_1, false);
+struct Vector3f {
+float x, y, z;
+};
+struct Orientation {
+float roll; // Angolo di rollio in gradi
+float pitch; // Angolo di beccheggio in gradi
+float yaw; // Angolo di imbardata (heading) in gradi
+};
 
+#define FILTER_ALPHA 0.98f // Peso del giroscopio nel filtro complementare
+#define DT 0.01f // Intervallo di tempo tra le letture (10ms)
+Orientation currentOrientation = {0.0f, 0.0f, 0.0f};
+Vector3f gyroData = {0.0f, 0.0f, 0.0f};
+Vector3f accelData = {0.0f, 0.0f, 0.0f};
+bool fusionActive = true;
+thread sensorFusionThread;
 // Dichiarazione dei motori
 motor leftA = motor(PORT11, gearSetting::ratio18_1, false);
 motor leftB = motor(PORT1, gearSetting::ratio18_1, false);
@@ -52,6 +67,7 @@ const int RITARDO_LETTURA_COLORE = 200; // millisecondi
 // Variabili globali
 bool osFront = false;
 bool osLat = false;
+bool timerScaduto = false;
 char coloreRilevato = 'n'; // 'n' = nessuno, 'r' = rosso, 'g' = giallo, 'v' = verde, 'b' = blu
 bool threadAttivo = true;
 bool giallo = false;
@@ -67,6 +83,72 @@ int conta = 1;
 triport expander = triport(PORT3);
 potV2 potBraccio(expander.A);
 potV2 potPinza(expander.B);
+
+// Ottiene i dati grezzi dal giroscopio
+Vector3f getGyroData(inertial& sensor) {
+Vector3f gyro;
+gyro.x = sensor.gyroRate(xaxis, dps); // Roll rate
+gyro.y = sensor.gyroRate(yaxis, dps); // Pitch rate
+gyro.z = sensor.gyroRate(zaxis, dps); // Yaw rate
+return gyro;
+}
+
+// Ottiene i dati grezzi dall'accelerometro
+Vector3f getAccelData(inertial& sensor) {
+Vector3f accel;
+accel.x = sensor.acceleration(xaxis);
+accel.y = sensor.acceleration(yaxis);
+accel.z = sensor.acceleration(zaxis);
+return accel;
+}
+
+// Estrae angoli di rollio e beccheggio dall'accelerometro
+void getAnglesFromAccel(Vector3f& accel, float& roll, float& pitch) {
+// Calcola gli angoli di rollio e beccheggio usando l'accelerometro
+roll = atan2f(accel.y, accel.z) * 57.295779513f; // Conversione radianti->gradi
+pitch = atan2f(-accel.x, sqrtf(accel.y * accel.y + accel.z * accel.z)) * 57.295779513f;
+}
+
+// Aggiorna l'orientamento del sensore usando un filtro complementare
+void updateOrientation() {
+// Ottieni angoli dall'accelerometro
+float accelRoll, accelPitch;
+getAnglesFromAccel(accelData, accelRoll, accelPitch);
+
+// Integra i dati del giroscopio
+currentOrientation.roll = FILTER_ALPHA * (currentOrientation.roll + gyroData.x * DT) +
+(1.0f - FILTER_ALPHA) * accelRoll;
+
+currentOrientation.pitch = FILTER_ALPHA * (currentOrientation.pitch + gyroData.y * DT) +
+(1.0f - FILTER_ALPHA) * accelPitch;
+
+// Aggiorna lo yaw (heading) solo dal giroscopio, ma applicando correzioni periodiche
+currentOrientation.yaw += gyroData.z * DT;
+
+// Normalizza l'angolo di yaw nell'intervallo [0, 360]
+if (currentOrientation.yaw < 0) currentOrientation.yaw += 360.0f;
+if (currentOrientation.yaw >= 360.0f) currentOrientation.yaw -= 360.0f;
+}
+
+// Thread principale per la fusione dei sensori
+void sensorFusionLoop() {
+while (fusionActive) {
+// Aggiorna i dati dai sensori
+gyroData = getGyroData(Inertial);
+accelData = getAccelData(Inertial);
+
+// Aggiorna l'orientamento usando i dati dei sensori
+updateOrientation();
+
+// Pausa breve per rispettare DT
+this_thread::sleep_for(milliseconds(int(DT * 1000)));
+}
+}
+
+// Ottieni l'heading corretto dalla fusione dei sensori
+float getCorrectedHeading() {
+return currentOrientation.yaw;
+}
 
 float getCurrentHeading() {
     return Inertial.heading();  // Restituisce l'angolo attuale (in gradi)
@@ -108,75 +190,148 @@ void checkFront() {
  */
 
 void turn(double angolo_target) {
-    // Ottieni l'angolo corrente
-    double angolo_corrente = Smartdrive.heading(degrees);
-    // Calcola la differenza per determinare la direzione di rotazione
-    double differenza = angolo_target - angolo_corrente;
-    
-    // Normalizza la differenza nell'intervallo [-180, 180]
-    if (differenza > 180) differenza -= 360;
-    if (differenza < -180) differenza += 360;
-    
-    // Determina la direzione e applica la compensazione appropriata
-    double angolo_finale;
-    if (differenza > 0) {
-        // Rotazione in senso antiorario (verso sinistra)
-        angolo_finale = angolo_target + 0.66;  // Compensazione invertita
-    } else {
-        // Rotazione in senso orario (verso destra)
-        angolo_finale = angolo_target - 0.66;  // Compensazione invertita
-    }
-    
-    // Normalizza l'angolo finale nell'intervallo [0, 360]
-    if (angolo_finale < 0) {
-        angolo_finale += 360;
-    } else if (angolo_finale >= 360) {
-        angolo_finale -= 360;
-    }
-    
-    // Usa SmartDrive per ruotare fino all'angolo finale
-    Smartdrive.turnToHeading(angolo_finale, degrees, VELOCITA_ROTAZIONE, rpm);
-    
-    // Breve pausa per assicurarsi che il movimento sia completato
-    this_thread::sleep_for(10);
+// Ottieni l'angolo corrente (ora usando il sensore con fusione)
+double angolo_corrente = getCorrectedHeading();
+
+// Calcola la differenza per determinare la direzione di rotazione
+double differenza = angolo_target - angolo_corrente;
+
+// Normalizza la differenza nell'intervallo [-180, 180]
+if (differenza > 180) differenza -= 360;
+if (differenza < -180) differenza += 360;
+
+// Determina la direzione e applica la compensazione appropriata
+double angolo_finale = angolo_target;
+
+// Implementa un controllo PID semplificato per la rotazione
+const double Kp = 0.5; // Fattore proporzionale
+const double tolleranza = 0.5; // Tolleranza in gradi
+
+// Usa SmartDrive per ruotare inizialmente vicino all'obiettivo
+Smartdrive.turnToHeading(angolo_finale, degrees, VELOCITA_ROTAZIONE, rpm);
+
+// Controlla l'errore residuo e correggi con precisione
+angolo_corrente = getCorrectedHeading();
+differenza = angolo_target - angolo_corrente;
+if (differenza > 180) differenza -= 360;
+if (differenza < -180) differenza += 360;
+
+// Correzione fine se necessario
+while (fabs(differenza) > tolleranza) {
+int velocitaCorrezione = int(Kp * differenza);
+if (fabs(velocitaCorrezione) < 5) {
+velocitaCorrezione = (velocitaCorrezione > 0) ? 5 : -5;
+}
+
+// Applica la correzione
+if (differenza > 0) {
+leftMotors.spin(forward, velocitaCorrezione, percent);
+rightMotors.spin(reverse, velocitaCorrezione, percent);
+} else {
+leftMotors.spin(reverse, velocitaCorrezione, percent);
+rightMotors.spin(forward, velocitaCorrezione, percent);
+}
+
+// Attendi un po' e ricontrolla
+this_thread::sleep_for(milliseconds(20));
+
+// Aggiorna la differenza
+angolo_corrente = getCorrectedHeading();
+differenza = angolo_target - angolo_corrente;
+if (differenza > 180) differenza -= 360;
+if (differenza < -180) differenza += 360;
+}
+
+// Ferma i motori quando l'orientamento è raggiunto
+leftMotors.stop(brake);
+rightMotors.stop(brake);
+
+// Breve pausa per assicurarsi che il movimento sia completato
+this_thread::sleep_for(10);
 }
 
 void move(char direzione, int distanza) {
-    // Verifica se l'angolo di heading è maggiore di 1.3 gradi
-   
-        float fattoreCorrezione = (direzione == 'f') ? 
-                                  FATTORE_CORREZIONE_AVANTI : 
-                                  FATTORE_CORREZIONE_INDIETRO;
-        float distanzaCorretta = distanza * fattoreCorrezione;
-        
-        if(direzione == 'f') {
-            // Prima parte: 95% della distanza normalmente
-            float distanzaPrima = distanzaCorretta * 0.95;
-            Smartdrive.driveFor(forward, distanzaPrima, mm, VELOCITA_AVANZAMENTO, rpm, true); // attendi il completamento
-            
-            // Breve pausa
-            this_thread::sleep_for(milliseconds(50));
-            
+// Memorizza l'orientamento target
+float targetHeading = Smartdrive.heading(degrees);
 
-            distanzaTotale += distanza; // Aggiorna contatore distanza
-        } else if (direzione == 'b') {
-            // Per il movimento all'indietro manteniamo il comportamento originale
-            Smartdrive.driveFor(reverse, distanzaCorretta, mm, VELOCITA_AVANZAMENTO, rpm);
-            
-            // Attendi fino a quando il movimento è completato
-            while(Smartdrive.isMoving()) {
-                this_thread::sleep_for(milliseconds(10));
-            }
-        }
-        
+// Fattore di correzione base
+float fattoreCorrezione = (direzione == 'f') ?
+FATTORE_CORREZIONE_AVANTI :
+FATTORE_CORREZIONE_INDIETRO;
+float distanzaCorretta = distanza * fattoreCorrezione;
 
- }
+// Parametri per la correzione di direzione durante il movimento
+const float Kp = 0.5; // Fattore proporzionale
+const int velBase = VELOCITA_AVANZAMENTO;
+
+if (direzione == 'f') {
+// Prima parte: 95% della distanza
+float distanzaPrima = distanzaCorretta * 0.95;
+
+// Imposta il movimento ma non aspetta il completamento
+Smartdrive.driveFor(forward, distanzaPrima, mm, velBase, rpm, false);
+
+// Loop per la correzione durante il movimento
+while (Smartdrive.isMoving()) {
+// Ottieni l'orientamento attuale e calcola l'errore
+float currentHeading = getCorrectedHeading();
+float headingError = targetHeading - currentHeading;
+
+// Normalizza l'errore
+if (headingError > 180) headingError -= 360;
+if (headingError < -180) headingError += 360;
+
+// Applica una correzione proporzionale
+if (fabs(headingError) > SogliaErroreHeading) {
+int correzione = int(Kp * headingError);
+leftMotors.setVelocity(velBase - correzione, percent);
+rightMotors.setVelocity(velBase + correzione, percent);
+}
+
+// Breve pausa
+this_thread::sleep_for(milliseconds(20));
+}
+
+// Breve pausa
+this_thread::sleep_for(milliseconds(50));
+
+distanzaTotale += distanza; // Aggiorna contatore distanza
+}
+else if (direzione == 'b') {
+// Per il movimento all'indietro
+Smartdrive.driveFor(reverse, distanzaCorretta, mm, velBase, rpm, false);
+
+// Loop per la correzione durante il movimento
+while (Smartdrive.isMoving()) {
+// Ottieni l'orientamento attuale e calcola l'errore
+float currentHeading = getCorrectedHeading();
+float headingError = targetHeading - currentHeading;
+
+// Normalizza l'errore
+if (headingError > 180) headingError -= 360;
+if (headingError < -180) headingError += 360;
+
+// Applica una correzione proporzionale (invertita per il reverse)
+if (fabs(headingError) > SogliaErroreHeading) {
+int correzione = int(Kp * headingError);
+leftMotors.setVelocity(velBase - correzione, percent);
+rightMotors.setVelocity(velBase + correzione, percent);
+}
+
+// Breve pausa
+this_thread::sleep_for(milliseconds(10));
+}
+}
+}
 
 /**
  * Controlla il braccio e la pinza
  * @param azione 'u' alza braccio, 'd' abbassa braccio, 'o' apri pinza, 'c' chiudi pinza
  */
 void controllaRobotBraccio(char azione) {
+    // Controlla se il timer è scaduto
+    if (timerScaduto) return;
+    
     int velocitaMotore = VELOCITA_BRACCIO;
     double posizione = 0.0;
     motor* motoreTarget = nullptr;
@@ -184,27 +339,45 @@ void controllaRobotBraccio(char azione) {
     switch(azione) {
         case 'u':
             braccio.spinToPosition(BRACCIO_ALZATO, rotationUnits::deg, (VELOCITA_BRACCIO - 10), velocityUnits::pct);
+            // Attendi fino a quando il movimento è completato o il timer scade
+            while(braccio.isSpinning() && !timerScaduto) {
+                this_thread::sleep_for(milliseconds(10));
+            }
             braccio.stop(hold);
             break;
         case 'd':
             braccio.spinToPosition(BRACCIO_ABBASSATO, rotationUnits::deg, VELOCITA_BRACCIO, velocityUnits::pct);
+            // Attendi fino a quando il movimento è completato o il timer scade
+            while(braccio.isSpinning() && !timerScaduto) {
+                this_thread::sleep_for(milliseconds(10));
+            }
             braccio.stop(hold);
             break;
         case 'o':
             pinza.spinToPosition(PINZA_APERTA, degrees, (VELOCITA_PINZA + 10), velocityUnits::pct, true);
+            // Attendi fino a quando il movimento è completato o il timer scade
+            while(pinza.isSpinning() && !timerScaduto) {
+                this_thread::sleep_for(milliseconds(10));
+            }
             pinza.stop(hold);
             break;
         case 'c':
             pinza.spinToPosition(PINZA_CHIUSA, degrees, VELOCITA_PINZA, velocityUnits::pct, false);
-            this_thread::sleep_for(milliseconds(1000));
+            if (!timerScaduto) {
+                this_thread::sleep_for(milliseconds(1000));
+            }
             pinza.stop(hold);
             break;
         default:
             break;
     }
     
-    if (motoreTarget != nullptr) {
+    if (motoreTarget != nullptr && !timerScaduto) {
         motoreTarget->spinToPosition(posizione, rotationUnits::deg, velocitaMotore, velocityUnits::pct, false);
+        // Attendi fino a quando il movimento è completato o il timer scade
+        while(motoreTarget->isSpinning() && !timerScaduto) {
+            this_thread::sleep_for(milliseconds(10));
+        }
         motoreTarget->stop(hold);
     }
 }
@@ -661,6 +834,24 @@ void inizio() {
     int conteggioVerde = 0;
     int conteggioGiallo = 0;
 
+    if (timerScaduto) return;
+    
+    // Resto del codice della funzione inizio...
+    
+    // Aggiungi controlli del timer nei cicli while e nei punti critici
+    
+    // Esempio:
+    while(Smartdrive.isMoving() && !timerScaduto) {
+        if(osFront) {
+            Smartdrive.stop(hold);
+            break;
+        }
+        this_thread::sleep_for(milliseconds(10));
+    }
+    
+    // Controlla il timer prima di continuare
+    if (timerScaduto) return;
+
     // Correzione della distanza
     float distanzaCorretta = distanza * FATTORE_CORREZIONE_AVANTI;
     Smartdrive.driveFor(forward, distanzaCorretta, mm, velocita, rpm);
@@ -810,50 +1001,81 @@ void inizio() {
     // Spegni il LED dopo l'uso
     SensoreOttico.setLight(ledState::off);
 }
+
+void timerThread() {
+    // Attende 210 secondi
+    this_thread::sleep_for(milliseconds(210000));
+    
+    // Imposta la variabile di controllo
+    timerScaduto = true;
+    threadAttivo = false;
+    
+    // Ferma tutti i motori
+    leftMotors.stop(brakeType::brake);
+    rightMotors.stop(brakeType::brake);
+    braccio.stop(brakeType::brake);
+    pinza.stop(brakeType::brake);
+    
+    // Visualizza messaggio di fine tempo
+    Brain.Screen.clearScreen();
+    Brain.Screen.setCursor(1,1);
+    Brain.Screen.print("TEMPO SCADUTO - 210 secondi");
+    Brain.Screen.newLine();
+    Brain.Screen.print("Distanza totale: %d mm", distanzaTotale);
+}
+
 /**
  * Programma principale
  */
 int main() {
-    // Reset iniziale dei motori
-    braccio.resetPosition();
-    pinza.resetPosition();
+// Reset iniziale dei motori
+braccio.resetPosition();
+pinza.resetPosition();
 
-    // Calibrazione del sensore inerziale
-    Brain.Screen.clearScreen();
-    Brain.Screen.setCursor(1,1);
-    Brain.Screen.print("Calibrazione sensore inerziale...");
-    
-    Inertial.calibrate();
-    while(Inertial.isCalibrating()) {
-        this_thread::sleep_for(milliseconds(30));
-    }
-    
-    Brain.Screen.clearScreen();
-    Brain.Screen.setCursor(1,1);
-    Brain.Screen.print("Calibrazione completata!");
-    this_thread::sleep_for(milliseconds(1));
+// Calibrazione del sensore inerziale
+Brain.Screen.clearScreen();
+Brain.Screen.setCursor(1,1);
+Brain.Screen.print("Calibrazione sensore inerziale...");
 
-    // Imposta l'orientamento iniziale
-    Smartdrive.setHeading(0, degrees);
+Inertial.calibrate();
+while(Inertial.isCalibrating()) {
+this_thread::sleep_for(milliseconds(30));
+}
 
-    // Avvia thread per il monitoraggio frontale
-    thread check = thread(checkFront);
-    
-    // Inizializzazione e lettura colore iniziale
-    inizio();
+Brain.Screen.clearScreen();
+Brain.Screen.setCursor(1,1);
+Brain.Screen.print("Calibrazione completata!");
+this_thread::sleep_for(milliseconds(1000));
 
+// Inizializza i valori dell'orientamento
+currentOrientation.roll = 0.0f;
+currentOrientation.pitch = 0.0f;
+currentOrientation.yaw = 0.0f;
 
-    
-    // Segnala completamento e mostra distanza totale
-    Brain.Screen.clearScreen();
-    Brain.Screen.setCursor(1,1);
-    Brain.Screen.print("Missione completata!");
-    Brain.Screen.newLine();
-    Brain.Screen.print("Distanza totale: %d mm", distanzaTotale);
-    
-    // Termina il thread di monitoraggio
-    threadAttivo = false;
-    check.join();
-    
-    return 0;
+// Avvia il thread per la fusione dei sensori
+fusionActive = true;
+sensorFusionThread = thread(sensorFusionLoop);
+
+// Imposta l'orientamento iniziale
+Smartdrive.setHeading(0, degrees);
+
+// Avvia thread per il monitoraggio frontale
+threadAttivo = true;
+thread check = thread(checkFront);
+
+// Inizializzazione e lettura colore iniziale
+inizio();
+
+// Segnala completamento e mostra distanza totale
+Brain.Screen.clearScreen();
+Brain.Screen.setCursor(1,1);
+Brain.Screen.print("Missione completata!");
+
+// Termina i thread
+threadAttivo = false;
+fusionActive = false;
+check.join();
+sensorFusionThread.join();
+
+return 0;
 }
